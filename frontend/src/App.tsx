@@ -9,6 +9,7 @@ import AdSubmission from './pages/AdSubmission';
 import BulkUpload from './pages/BulkUpload';
 import Campaigns from './pages/Campaigns';
 import Reporting from './pages/Reporting';
+import Alerts from './pages/Alerts';
 import Settings from './pages/Settings';
 import './i18n';
 
@@ -29,6 +30,7 @@ const App: React.FC = () => {
                     <Route path="/bulk-upload" element={<BulkUpload />} />
                     <Route path="/campaigns" element={<Campaigns />} />
                     <Route path="/reporting" element={<Reporting />} />
+                    <Route path="/alerts" element={<Alerts />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

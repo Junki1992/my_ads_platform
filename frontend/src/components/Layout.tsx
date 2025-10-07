@@ -13,6 +13,7 @@ import {
   FundOutlined,
   GlobalOutlined,
   BarChartOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -98,6 +99,12 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
       icon: <BarChartOutlined />,
       label: t('reporting'),
       onClick: () => handleNavigate('/reporting'),
+    },
+    {
+      key: '/alerts',
+      icon: <BellOutlined />,
+      label: 'アラート',
+      onClick: () => handleNavigate('/alerts'),
     },
     {
       key: '/settings',
