@@ -899,7 +899,7 @@ const Campaigns: React.FC = () => {
       dataIndex: 'budget',
       key: 'budget',
       width: 100,
-      render: (value: number) => `¥${value.toLocaleString()}`,
+      render: (value: number) => `¥${Math.floor(value).toLocaleString()}`,
     },
     {
       title: t('period'),
@@ -1188,7 +1188,7 @@ const Campaigns: React.FC = () => {
                   <strong>{t('purpose')}:</strong> {selectedCampaign.objective}
                 </div>
                 <div style={{ marginBottom: 8 }}>
-                  <strong>{t('budget')}:</strong> ¥{selectedCampaign.budget?.toLocaleString()}
+                  <strong>{t('budget')}:</strong> ¥{selectedCampaign.budget ? Math.floor(selectedCampaign.budget).toLocaleString() : '0'}
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <strong>{t('startDate')}:</strong> {dayjs(selectedCampaign.start_date).format('YYYY-MM-DD')}
@@ -1304,7 +1304,7 @@ const Campaigns: React.FC = () => {
                       dataIndex: 'budget',
                       key: 'budget',
                       width: 120,
-                      render: (budget: number) => budget ? `¥${budget.toLocaleString()}` : '-',
+                      render: (budget: number) => budget ? `¥${Math.floor(budget).toLocaleString()}` : '-',
                     },
                     {
                       title: '入札戦略',
