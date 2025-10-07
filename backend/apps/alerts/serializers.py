@@ -17,7 +17,7 @@ class AlertRuleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'alert_type', 'condition', 'threshold_value',
             'target_campaigns', 'is_active', 'notification_frequency',
-            'chatwork_webhook_url', 'slack_webhook_url', 'email_notification',
+            'chatwork_webhook_url', 'slack_webhook_url', 'email_notification', 'email_addresses',
             'chatwork_message_template', 'slack_message_template',
             'created_at', 'updated_at', 'last_triggered'
         ]
@@ -28,6 +28,21 @@ class AlertRuleSerializer(serializers.ModelSerializer):
         # Webhook URLが設定されている場合の検証
         if not data.get('chatwork_webhook_url') and not data.get('slack_webhook_url') and not data.get('email_notification'):
             raise serializers.ValidationError('少なくとも1つの通知方法を設定してください。')
+        
+        # メール通知が有効な場合のメールアドレス検証
+        if data.get('email_notification'):
+            email_addresses = data.get('email_addresses', '').strip()
+            if not email_addresses:
+                raise serializers.ValidationError('メール通知を有効にする場合は、メールアドレスを入力してください。')
+            
+            # メールアドレスの形式検証
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            emails = [email.strip() for email in email_addresses.split('\n') if email.strip()]
+            
+            for email in emails:
+                if not re.match(email_pattern, email):
+                    raise serializers.ValidationError(f'無効なメールアドレス形式です: {email}')
         
         # 閾値の検証（数値系のアラートタイプの場合）
         if data.get('alert_type') in ['BUDGET_THRESHOLD', 'PERFORMANCE_DROP']:

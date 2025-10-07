@@ -13,6 +13,7 @@ export interface AlertRule {
   chatwork_webhook_url?: string;
   slack_webhook_url?: string;
   email_notification: boolean;
+  email_addresses?: string;
   chatwork_message_template?: string;
   slack_message_template?: string;
   created_at?: string;

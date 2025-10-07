@@ -611,7 +611,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
     def reporting_data(self, request):
         """レポート用のパフォーマンスデータを取得"""
         user = request.user
-        campaigns = Campaign.objects.filter(user=user).exclude(status='DELETED')
+        campaigns = Campaign.objects.filter(user=user).exclude(status__in=['DELETED', 'ARCHIVED'])
         
         # クエリパラメータから取得
         campaign_id = request.GET.get('campaign_id', None)

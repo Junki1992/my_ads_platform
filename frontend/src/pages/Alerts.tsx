@@ -681,6 +681,19 @@ const Alerts: React.FC = () => {
 
             <Col xs={24}>
               <Form.Item
+                name="email_addresses"
+                label="通知先メールアドレス"
+                extra="複数のメールアドレスを設定する場合は、1行に1つずつ入力してください"
+              >
+                <TextArea
+                  rows={4}
+                  placeholder="alert@example.com&#10;manager@example.com&#10;team@example.com"
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24}>
+              <Form.Item
                 name="chatwork_message_template"
                 label="Chatwork メッセージテンプレート"
               >

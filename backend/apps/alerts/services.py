@@ -271,16 +271,18 @@ class NotificationService:
             subject = f"🚨 アラート: {self.alert_rule.name}"
             message = self._format_message(self.alert_rule.slack_message_template, context)
             
-            # ユーザーのメールアドレスを取得
-            recipient_email = self.alert_rule.user.email
-            if self.alert_settings and self.alert_settings.default_email:
-                recipient_email = self.alert_settings.default_email
+            # メールアドレスを取得
+            recipient_emails = self._get_email_addresses()
+            
+            if not recipient_emails:
+                logger.warning(f"No email addresses configured for alert rule {self.alert_rule.id}")
+                return None
             
             send_mail(
                 subject=subject,
                 message=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[recipient_email],
+                recipient_list=recipient_emails,
                 fail_silently=False
             )
             
@@ -289,9 +291,10 @@ class NotificationService:
             )
             notification.status = 'SENT'
             notification.sent_at = timezone.now()
+            notification.response_data = {'recipients': recipient_emails}
             notification.save()
             
-            logger.info(f"Email notification sent successfully for alert rule {self.alert_rule.id}")
+            logger.info(f"Email notification sent successfully to {len(recipient_emails)} recipients for alert rule {self.alert_rule.id}")
             return notification
             
         except Exception as e:
@@ -303,6 +306,26 @@ class NotificationService:
             notification.error_message = str(e)
             notification.save()
             return notification
+    
+    def _get_email_addresses(self) -> List[str]:
+        """メールアドレスを取得"""
+        emails = []
+        
+        # アラートルールに設定されたメールアドレス
+        if self.alert_rule.email_addresses:
+            rule_emails = [email.strip() for email in self.alert_rule.email_addresses.split('\n') if email.strip()]
+            emails.extend(rule_emails)
+        
+        # デフォルトメールアドレス（アラートルールに設定がない場合）
+        if not emails and self.alert_settings and self.alert_settings.default_email:
+            emails.append(self.alert_settings.default_email)
+        
+        # ユーザーのメールアドレス（最後のフォールバック）
+        if not emails and self.alert_rule.user.email:
+            emails.append(self.alert_rule.user.email)
+        
+        # 重複を除去
+        return list(set(emails))
 
 
 class AlertConditionChecker:

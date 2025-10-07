@@ -54,6 +54,7 @@ class AlertRule(models.Model):
     chatwork_webhook_url = models.URLField(blank=True, help_text=_('Chatwork Webhook URL'))
     slack_webhook_url = models.URLField(blank=True, help_text=_('Slack Webhook URL'))
     email_notification = models.BooleanField(default=False)
+    email_addresses = models.TextField(blank=True, help_text=_('通知先メールアドレス（複数の場合は改行区切り）'))
     
     # メッセージテンプレート
     chatwork_message_template = models.TextField(
