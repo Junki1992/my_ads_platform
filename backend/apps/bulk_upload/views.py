@@ -8,7 +8,46 @@ from django.utils import timezone
 import pandas as pd
 import json
 import logging
+import uuid
 from celery import shared_task
+
+def map_optimization_event_to_meta_api(optimization_event):
+    """
+    CSVのoptimization_eventをMeta APIのoptimization_goalにマッピング
+    デモ環境では複雑なコンバージョン設定を避けて、シンプルな目標を使用
+    """
+    mapping = {
+        'CONVERSION': 'LINK_CLICKS',  # デモ環境ではLINK_CLICKSを使用
+        'PURCHASE': 'LINK_CLICKS',    # デモ環境ではLINK_CLICKSを使用
+        'VIEW_CONTENT': 'LANDING_PAGE_VIEWS',
+        'LINK_CLICKS': 'LINK_CLICKS',
+        'IMPRESSIONS': 'IMPRESSIONS',
+        'REACH': 'REACH',
+        'ENGAGEMENT': 'POST_ENGAGEMENT',
+        'LEAD_GENERATION': 'LEAD_GENERATION',
+        'APP_INSTALLS': 'APP_INSTALLS',
+        'VIDEO_VIEWS': 'THRUPLAY',
+        'BRAND_AWARENESS': 'AD_RECALL_LIFT',
+        'TRAFFIC': 'LINK_CLICKS',
+        'SALES': 'LINK_CLICKS',       # デモ環境ではLINK_CLICKSを使用
+        'AWARENESS': 'REACH'
+    }
+    return mapping.get(optimization_event, 'LINK_CLICKS')  # デフォルトはLINK_CLICKS
+
+def map_bid_strategy_to_meta_api(bid_strategy):
+    """
+    CSVのbid_strategyをMeta APIのbid_strategyにマッピング
+    """
+    mapping = {
+        'LOWEST_COST': 'LOWEST_COST_WITHOUT_CAP',
+        'LOWEST_COST_WITHOUT_CAP': 'LOWEST_COST_WITHOUT_CAP',
+        'LOWEST_COST_WITH_BID_CAP': 'LOWEST_COST_WITH_BID_CAP',
+        'COST_CAP': 'COST_CAP',
+        'HIGHEST_VALUE': 'LOWEST_COST_WITH_MIN_ROAS',
+        'TARGET_COST': 'COST_CAP',
+        'TARGET_ROAS': 'LOWEST_COST_WITH_MIN_ROAS'
+    }
+    return mapping.get(bid_strategy, 'LOWEST_COST_WITHOUT_CAP')  # デフォルト
 from .models import BulkUpload, BulkUploadRecord
 from .serializers import BulkUploadSerializer, BulkUploadRecordSerializer
 from apps.campaigns.models import Campaign, AdSet, Ad
@@ -92,15 +131,43 @@ class BulkUploadViewSet(viewsets.ModelViewSet):
                 'error': 'ファイルが選択されていません'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # 選択されたMetaアカウントIDを取得
+        selected_account_id = request.data.get('selected_account_id')
+        
         try:
             # CSVファイルを読み込み
             if file.name.endswith('.csv'):
-                df = pd.read_csv(file, encoding='utf-8-sig')
+                try:
+                    df = pd.read_csv(file, encoding='utf-8-sig')
+                except UnicodeDecodeError:
+                    try:
+                        df = pd.read_csv(file, encoding='shift_jis')
+                    except UnicodeDecodeError:
+                        df = pd.read_csv(file, encoding='cp932')
             else:
                 df = pd.read_excel(file)
             
+            # 空のDataFrameの場合はエラー
+            if df.empty:
+                return Response({
+                    'error': 'ファイルが空です'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # データをクリーンアップしてからバリデーション
+            cleaned_records = []
+            for record in df.to_dict('records'):
+                cleaned_record = {}
+                for key, value in record.items():
+                    if pd.isna(value):
+                        cleaned_record[key] = None
+                    elif isinstance(value, (int, float)) and pd.isna(value):
+                        cleaned_record[key] = None
+                    else:
+                        cleaned_record[key] = value
+                cleaned_records.append(cleaned_record)
+            
             # データをバリデーション
-            validation_results = validate_campaign_data(df.to_dict('records'))
+            validation_results = validate_campaign_data(cleaned_records)
             
             # BulkUploadレコードを作成
             bulk_upload = BulkUpload.objects.create(
@@ -108,11 +175,12 @@ class BulkUploadViewSet(viewsets.ModelViewSet):
                 file_name=file.name,
                 file_path=f"temp/{file.name}",
                 total_records=len(df),
-                status='VALIDATING'
+                status='VALIDATING',
+                selected_account_id=selected_account_id
             )
             
             # バリデーション結果をBulkUploadRecordに保存
-            for i, (row_data, validation) in enumerate(zip(df.to_dict('records'), validation_results)):
+            for i, (row_data, validation) in enumerate(zip(cleaned_records, validation_results)):
                 BulkUploadRecord.objects.create(
                     bulk_upload=bulk_upload,
                     row_number=i + 2,  # Excel行番号（ヘッダー行を含む）
@@ -220,31 +288,53 @@ def validate_campaign_data(campaign_data_list):
         ]
         
         for field in required_fields:
-            if not data.get(field):
+            value = data.get(field)
+            if value is None or value == '' or (isinstance(value, str) and value.strip() == ''):
                 errors.append(f'{field}は必須です')
         
         # 数値フィールドのチェック
-        if data.get('budget') and (not isinstance(data['budget'], (int, float)) or data['budget'] <= 0):
-            errors.append('予算金額は0より大きい数値である必要があります')
+        budget = data.get('budget')
+        if budget is not None and budget != '':
+            try:
+                budget = float(budget)
+                if budget <= 0:
+                    errors.append('予算金額は0より大きい数値である必要があります')
+            except (ValueError, TypeError):
+                errors.append('予算金額は数値である必要があります')
         
-        if data.get('age_min') and (not isinstance(data['age_min'], (int, float)) or data['age_min'] < 13):
-            errors.append('最小年齢は13以上である必要があります')
+        age_min = data.get('age_min')
+        if age_min is not None and age_min != '':
+            try:
+                age_min = int(age_min)
+                if age_min < 13:
+                    errors.append('最小年齢は13以上である必要があります')
+            except (ValueError, TypeError):
+                errors.append('最小年齢は数値である必要があります')
         
-        if data.get('age_max') and (not isinstance(data['age_max'], (int, float)) or data['age_max'] > 65):
-            errors.append('最大年齢は65以下である必要があります')
+        age_max = data.get('age_max')
+        if age_max is not None and age_max != '':
+            try:
+                age_max = int(age_max)
+                if age_max > 65:
+                    errors.append('最大年齢は65以下である必要があります')
+            except (ValueError, TypeError):
+                errors.append('最大年齢は数値である必要があります')
         
         # 値の妥当性チェック
         for field, valid_list in valid_values.items():
-            if data.get(field) and data[field] not in valid_list:
+            value = data.get(field)
+            if value is not None and value != '' and str(value) not in valid_list:
                 errors.append(f'{field}の値が無効です。有効な値: {", ".join(valid_list)}')
         
         # URL形式チェック
         url_pattern = r'^https?://.+'
         import re
-        if data.get('website_url') and not re.match(url_pattern, str(data['website_url'])):
+        website_url = data.get('website_url')
+        if website_url is not None and website_url != '' and not re.match(url_pattern, str(website_url)):
             errors.append('ウェブサイトURLは正しいURL形式である必要があります')
         
-        if data.get('image_url') and not re.match(url_pattern, str(data['image_url'])):
+        image_url = data.get('image_url')
+        if image_url is not None and image_url != '' and not re.match(url_pattern, str(image_url)):
             errors.append('画像URLは正しいURL形式である必要があります')
         
         validation_results.append({
@@ -275,10 +365,19 @@ def process_bulk_upload(self, bulk_upload_id):
             return {'status': 'completed', 'message': '有効なレコードがありません'}
         
         # Metaアカウントを取得
-        meta_account = MetaAccount.objects.filter(
-            user=bulk_upload.user, 
-            is_active=True
-        ).first()
+        if bulk_upload.selected_account_id:
+            # 選択されたアカウントを使用
+            meta_account = MetaAccount.objects.filter(
+                id=bulk_upload.selected_account_id,
+                user=bulk_upload.user,
+                is_active=True
+            ).first()
+        else:
+            # デフォルトで最初のアクティブなアカウントを使用
+            meta_account = MetaAccount.objects.filter(
+                user=bulk_upload.user, 
+                is_active=True
+            ).first()
         
         if not meta_account:
             # デモ用のMetaAccountを作成
@@ -301,42 +400,117 @@ def process_bulk_upload(self, bulk_upload_id):
                 
                 with transaction.atomic():
                     # キャンペーン作成
+                    # 終了日の処理（通算予算の場合は必須）
+                    from datetime import datetime, timedelta
+                    end_date = campaign_data.get('end_date', '')
+                    
+                    # 不正な終了日値をチェック（TRUE, FALSE, 空文字など）
+                    if end_date in ['TRUE', 'FALSE', 'true', 'false', '', None]:
+                        end_date = ''
+                    
+                    # 通算予算で終了日が未設定の場合、開始日から30日後に設定
+                    if not end_date and campaign_data.get('budget_type') == 'LIFETIME':
+                        start_date_str = campaign_data.get('start_date', '')
+                        if start_date_str:
+                            try:
+                                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+                                end_date = (start_date + timedelta(days=30)).strftime('%Y-%m-%d')
+                            except ValueError:
+                                end_date = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+                        else:
+                            end_date = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+                    
+                    # 日次予算でも終了日が不正な場合は空にする
+                    if campaign_data.get('budget_type') == 'DAILY' and end_date in ['TRUE', 'FALSE', 'true', 'false']:
+                        end_date = ''
+                    
+                    # 日付フィールドの処理（空文字列の場合はNoneにする）
+                    start_date = campaign_data.get('start_date', '')
+                    if not start_date or start_date == '':
+                        start_date = None
+                    
+                    if not end_date or end_date == '':
+                        end_date = None
+                    
                     campaign = Campaign.objects.create(
                         user=bulk_upload.user,
                         meta_account=meta_account,
+                        campaign_id=str(uuid.uuid4()),
                         name=campaign_data.get('campaign_name', ''),
                         objective=campaign_data.get('objective', ''),
                         budget_type=campaign_data.get('budget_type', 'DAILY'),
                         budget=float(campaign_data.get('budget', 0)),
-                        start_date=campaign_data.get('start_date', ''),
-                        end_date=campaign_data.get('end_date', ''),
+                        start_date=start_date,
+                        end_date=end_date,
                         status=campaign_data.get('campaign_status', 'PAUSED')
                     )
                     
                     # AdSet作成
+                    # ターゲティング設定を構築
+                    # locationsを配列に変換（CSVからは文字列で取得される）
+                    locations_str = campaign_data.get('locations', 'JP')
+                    if isinstance(locations_str, str):
+                        locations_list = [loc.strip() for loc in locations_str.split(',')]
+                    else:
+                        locations_list = locations_str if isinstance(locations_str, list) else ['JP']
+                    
+                    # interestsを配列に変換（CSVからは文字列で取得される）
+                    interests_str = campaign_data.get('interests', '')
+                    if isinstance(interests_str, str) and interests_str:
+                        interests_list = [interest.strip() for interest in interests_str.split(',')]
+                    else:
+                        interests_list = interests_str if isinstance(interests_str, list) else []
+                    
+                    targeting = {
+                        'geo_locations': {'countries': locations_list},
+                        'age_min': int(campaign_data.get('age_min', 13)),
+                        'age_max': int(campaign_data.get('age_max', 65)),
+                        'genders': [1, 2] if campaign_data.get('gender', 'all') == 'all' else ([1] if campaign_data.get('gender') == 'male' else [2]),
+                        'interests': interests_list,
+                        'behaviors': [],
+                        'custom_audiences': [],
+                        'excluded_custom_audiences': [],
+                        'lookalike_audiences': []
+                    }
+                    
+                    # optimization_eventをMeta API対応の値にマッピング
+                    mapped_optimization_goal = map_optimization_event_to_meta_api(
+                        campaign_data.get('optimization_event', 'LINK_CLICKS')
+                    )
+                    
+                    # bid_strategyをMeta API対応の値にマッピング
+                    mapped_bid_strategy = map_bid_strategy_to_meta_api(
+                        campaign_data.get('bid_strategy', 'LOWEST_COST_WITHOUT_CAP')
+                    )
+                    
                     adset = AdSet.objects.create(
                         campaign=campaign,
+                        adset_id=str(uuid.uuid4()),
                         name=campaign_data.get('adset_name', ''),
-                        bid_strategy=campaign_data.get('bid_strategy', ''),
-                        optimization_event=campaign_data.get('optimization_event', ''),
-                        placement_type=campaign_data.get('placement_type', ''),
-                        age_min=int(campaign_data.get('age_min', 13)),
-                        age_max=int(campaign_data.get('age_max', 65)),
-                        gender=campaign_data.get('gender', 'all'),
-                        locations=campaign_data.get('locations', []),
-                        interests=campaign_data.get('interests', []),
-                        attribution_window=campaign_data.get('attribution_window', 'click_7d')
+                        bid_strategy=mapped_bid_strategy,
+                        optimization_goal=mapped_optimization_goal,
+                        placement_type=campaign_data.get('placement_type', 'AUTOMATIC'),
+                        targeting=targeting,
+                        start_time=start_date,
+                        end_time=end_date
                     )
                     
                     # Ad作成
+                    # クリエイティブ設定を構築
+                    creative = {}
+                    if campaign_data.get('image_url'):
+                        creative['image_url'] = campaign_data.get('image_url')
+                    
                     ad = Ad.objects.create(
                         adset=adset,
+                        ad_id=str(uuid.uuid4()),
                         name=campaign_data.get('ad_name', ''),
                         headline=campaign_data.get('headline', ''),
                         description=campaign_data.get('description', ''),
-                        website_url=campaign_data.get('website_url', ''),
-                        cta=campaign_data.get('cta', ''),
-                        image_url=campaign_data.get('image_url', ''),
+                        link_url=campaign_data.get('website_url', ''),
+                        cta_type=campaign_data.get('cta', 'LEARN_MORE'),
+                        creative=creative,
+                        facebook_page_id=campaign_data.get('facebook_page_id', '123456789012345'),  # CSVから読み取り、デフォルト値
                         status='PAUSED'
                     )
                     

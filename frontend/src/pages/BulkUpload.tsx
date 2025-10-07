@@ -19,7 +19,8 @@ import {
   Col,
   Statistic,
   Badge,
-  Popconfirm
+  Popconfirm,
+  Select
 } from 'antd';
 import { 
   UploadOutlined, 
@@ -37,6 +38,7 @@ import {
 import * as XLSX from 'xlsx';
 import campaignService from '../services/campaignService';
 import bulkUploadService, { type BulkUpload as BulkUploadType, type BulkUploadProgress, type ValidationResult } from '../services/bulkUploadService';
+import metaAccountService, { type MetaAccount } from '../services/metaAccountService';
 
 const { Step } = Steps;
 const { Title, Text } = Typography;
@@ -104,6 +106,8 @@ const BulkUpload: React.FC = () => {
   const [bulkUploadId, setBulkUploadId] = useState<number | null>(null);
   const [bulkUploadProgress, setBulkUploadProgress] = useState<BulkUploadProgress | null>(null);
   const [progressInterval, setProgressInterval] = useState<NodeJS.Timeout | null>(null);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
   // 画面サイズの検出
   useEffect(() => {
@@ -124,6 +128,26 @@ const BulkUpload: React.FC = () => {
       }
     };
   }, [progressInterval]);
+
+  // Metaアカウント一覧を取得
+  useEffect(() => {
+    const fetchMetaAccounts = async () => {
+      try {
+        const accounts = await metaAccountService.fetchMetaAccounts();
+        setMetaAccounts(accounts);
+        // 最初のアクティブなアカウントを選択
+        const activeAccount = accounts.find(acc => acc.is_active);
+        if (activeAccount) {
+          setSelectedAccountId(activeAccount.id);
+        }
+      } catch (error) {
+        console.error('Metaアカウント取得エラー:', error);
+        message.error('Metaアカウントの取得に失敗しました');
+      }
+    };
+
+    fetchMetaAccounts();
+  }, []);
 
   // CSV列定義（AdSubmission.tsxと完全一致）
   const csvColumns: ColumnMapping[] = [
@@ -185,7 +209,13 @@ const BulkUpload: React.FC = () => {
 
     try {
       // バックエンドAPIでファイルをアップロードしてバリデーション
-      const response = await bulkUploadService.uploadAndValidate(file);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (selectedAccountId) {
+        formData.append('selected_account_id', selectedAccountId.toString());
+      }
+      
+      const response = await bulkUploadService.uploadAndValidateWithAccount(formData);
       
       // バリデーション結果をCampaignData形式に変換
       const campaigns: CampaignData[] = response.validation_results.map((result: ValidationResult, index: number) => ({
@@ -538,6 +568,50 @@ const BulkUpload: React.FC = () => {
                 CSVテンプレートをダウンロード
               </Button>
             </div>
+
+            {/* Metaアカウント選択 */}
+            {metaAccounts.length > 0 && (
+              <div style={{ 
+                marginTop: 'clamp(24px, 5vw, 32px)',
+                padding: '0 clamp(8px, 2vw, 32px)',
+                maxWidth: '800px',
+                marginLeft: 'auto',
+                marginRight: 'auto'
+              }}>
+                <Card size="small" style={{ textAlign: 'left' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <Text strong style={{ fontSize: 'clamp(14px, 3.5vw, 16px)' }}>
+                      Meta広告アカウント選択
+                    </Text>
+                  </div>
+                  <Select
+                    value={selectedAccountId}
+                    onChange={setSelectedAccountId}
+                    placeholder="アカウントを選択してください"
+                    style={{ width: '100%' }}
+                    size="large"
+                  >
+                    {metaAccounts.map(account => (
+                      <Select.Option key={account.id} value={account.id}>
+                        <div>
+                          <div style={{ fontWeight: 'bold' }}>{account.account_name}</div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            ID: {account.account_id}
+                          </div>
+                        </div>
+                      </Select.Option>
+                    ))}
+                  </Select>
+                  <div style={{ 
+                    marginTop: '8px', 
+                    fontSize: 'clamp(11px, 2.5vw, 12px)', 
+                    color: '#666' 
+                  }}>
+                    選択したアカウントにキャンペーンが作成されます
+                  </div>
+                </Card>
+              </div>
+            )}
           </div>
 
           <Alert

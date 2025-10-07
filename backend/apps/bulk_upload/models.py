@@ -21,6 +21,7 @@ class BulkUpload(models.Model):
     failed_records = models.IntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='UPLOADING')
     error_log = models.TextField(blank=True)
+    selected_account_id = models.IntegerField(null=True, blank=True, help_text='選択されたMetaアカウントID')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

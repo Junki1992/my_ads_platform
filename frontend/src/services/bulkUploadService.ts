@@ -58,7 +58,22 @@ class BulkUploadService {
     formData.append('file', file);
     
     const response = await api.post<UploadAndValidateResponse>(
-      '/bulk_upload/uploads/upload_and_validate/',
+      '/bulk-upload/uploads/upload_and_validate/',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    
+    return response.data;
+  }
+
+  // CSVファイルのアップロードとバリデーション（アカウント選択付き）
+  async uploadAndValidateWithAccount(formData: FormData): Promise<UploadAndValidateResponse> {
+    const response = await api.post<UploadAndValidateResponse>(
+      '/bulk-upload/uploads/upload_and_validate/',
       formData,
       {
         headers: {
@@ -76,38 +91,38 @@ class BulkUploadService {
     message: string;
     bulk_upload_id: number;
   }> {
-    const response = await api.post(`/bulk_upload/uploads/${bulkUploadId}/process/`);
+    const response = await api.post(`/bulk-upload/uploads/${bulkUploadId}/process/`);
     return response.data;
   }
 
   // 進捗状況の取得
   async getProgress(bulkUploadId: number): Promise<BulkUploadProgress> {
     const response = await api.get<BulkUploadProgress>(
-      `/bulk_upload/uploads/${bulkUploadId}/progress/`
+      `/bulk-upload/uploads/${bulkUploadId}/progress/`
     );
     return response.data;
   }
 
   // 一括入稿履歴の取得
   async getBulkUploads(): Promise<BulkUpload[]> {
-    const response = await api.get<BulkUpload[]>('/bulk_upload/uploads/');
+    const response = await api.get<BulkUpload[]>('/bulk-upload/uploads/');
     return response.data;
   }
 
   // 特定の一括入稿の詳細取得
   async getBulkUpload(id: number): Promise<BulkUpload> {
-    const response = await api.get<BulkUpload>(`/bulk_upload/uploads/${id}/`);
+    const response = await api.get<BulkUpload>(`/bulk-upload/uploads/${id}/`);
     return response.data;
   }
 
   // 一括入稿の削除
   async deleteBulkUpload(id: number): Promise<void> {
-    await api.delete(`/bulk_upload/uploads/${id}/`);
+    await api.delete(`/bulk-upload/uploads/${id}/`);
   }
 
   // CSVテンプレートのダウンロード
   async downloadTemplate(): Promise<Blob> {
-    const response = await api.get('/bulk_upload/template/', {
+    const response = await api.get('/bulk-upload/template/', {
       responseType: 'blob',
     });
     return response.data;

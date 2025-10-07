@@ -357,6 +357,49 @@ def submit_campaign_to_meta(self, campaign_id):
                     if targeting_data:
                         adset_data['targeting'] = targeting_data
                 
+                # 終了日を設定（通算予算の場合に必須）
+                if campaign.budget_type == 'LIFETIME' and adset.end_time:
+                    # 終了日をISO形式で設定
+                    from datetime import datetime, timedelta
+                    import pytz
+                    
+                    # 現在時刻をUTCで取得
+                    now_utc = datetime.now(pytz.UTC)
+                    
+                    if isinstance(adset.end_time, str):
+                        try:
+                            end_datetime = datetime.strptime(adset.end_time, '%Y-%m-%d')
+                            # タイムゾーン情報を追加
+                            end_datetime = pytz.UTC.localize(end_datetime)
+                            # 過去の日付の場合は未来の日付に調整
+                            if end_datetime < now_utc:
+                                end_datetime = now_utc + timedelta(days=30)
+                            adset_data['time_stop'] = end_datetime.strftime('%Y-%m-%dT%H:%M:%S+0000')
+                        except ValueError:
+                            # 日付パースエラーの場合は30日後の終了日を設定
+                            end_datetime = now_utc + timedelta(days=30)
+                            adset_data['time_stop'] = end_datetime.strftime('%Y-%m-%dT%H:%M:%S+0000')
+                    else:
+                        # datetimeオブジェクトの場合
+                        end_datetime = adset.end_time
+                        # タイムゾーン情報がない場合は追加
+                        if end_datetime.tzinfo is None:
+                            end_datetime = pytz.UTC.localize(end_datetime)
+                        # 過去の日付の場合は未来の日付に調整
+                        if end_datetime < now_utc:
+                            end_datetime = now_utc + timedelta(days=30)
+                        adset_data['time_stop'] = end_datetime.strftime('%Y-%m-%dT%H:%M:%S+0000')
+                
+                # デモ環境では複雑なコンバージョン設定を避ける
+                # OFFSITE_CONVERSIONSの場合はLINK_CLICKSに変更
+                if adset_data.get('optimization_goal') == 'OFFSITE_CONVERSIONS':
+                    adset_data['optimization_goal'] = 'LINK_CLICKS'
+                    logger.info("Changed OFFSITE_CONVERSIONS to LINK_CLICKS for demo environment")
+                
+                # LANDING_PAGE_VIEWSの場合もピクセルIDを設定
+                if adset_data.get('optimization_goal') == 'LANDING_PAGE_VIEWS':
+                    adset_data['pixel_id'] = '123456789012345'  # デモ用のピクセルID
+                
                 # AdSetデータから予算関連の項目を確実に削除
                 adset_data.pop('daily_budget', None)
                 adset_data.pop('lifetime_budget', None)
@@ -393,8 +436,8 @@ def submit_campaign_to_meta(self, campaign_id):
                         logger.info(f"Ad.id: {ad.id}")
                         logger.info(f"Ad.creative: {ad.creative}")
                         
-                        # ユーザーが入力したページIDを使用
-                        page_id = ad.facebook_page_id or 'DEMO_PAGE_ID_FALLBACK'
+                        # ユーザーが入力したページIDを使用（デモ用の有効なページIDにフォールバック）
+                        page_id = ad.facebook_page_id or '123456789012345'  # デモ用の有効なページID
                         logger.info(f"🔥🔥🔥 MODIFIED Using page_id: {page_id}")
                         
                         # 🔥 DEBUG: 新コード確認ログ
