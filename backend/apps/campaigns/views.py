@@ -28,7 +28,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """自分のキャンペーンのみ取得"""
         user = self.request.user
-        queryset = Campaign.objects.filter(user=user).exclude(status='DELETED')
+        queryset = Campaign.objects.filter(user=user).exclude(status__in=['DELETED', 'ARCHIVED'])
         
         # フィルタリング
         status_filter = self.request.query_params.get('status', None)
@@ -499,7 +499,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
     def stats(self, request):
         """キャンペーン統計とダッシュボードデータ"""
         user = request.user
-        campaigns = Campaign.objects.filter(user=user).exclude(status='DELETED')
+        campaigns = Campaign.objects.filter(user=user).exclude(status__in=['DELETED', 'ARCHIVED'])
         
         # 基本統計
         total_budget = sum(float(c.budget) for c in campaigns)
