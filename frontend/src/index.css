@@ -1,0 +1,283 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* レスポンシブ対応: モバイル向けスタイル */
+@media (max-width: 768px) {
+  /* モーダルの幅を画面に合わせる */
+  .ant-modal {
+    max-width: calc(100vw - 32px) !important;
+    margin: 16px !important;
+  }
+  
+  /* テーブルのフォントサイズを小さく */
+  .ant-table {
+    font-size: 12px;
+  }
+  
+  /* カードの余白を調整 */
+  .ant-card {
+    margin-bottom: 16px;
+  }
+  
+  /* ヘッダーのタイトルを小さく */
+  .ant-layout-header h1 {
+    font-size: 14px !important;
+  }
+  
+  /* ステップのタイトルを縦に */
+  .ant-steps-item-title {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  /* 超小画面ではさらに調整 */
+  .ant-layout-header {
+    padding: 0 12px !important;
+  }
+  
+  .ant-layout-content {
+    padding: 12px !important;
+    margin: 12px 8px !important;
+  }
+  
+  /* アイコンがあるボタンのテキストのみ隠す */
+  .ant-btn .anticon + .button-text {
+    display: none;
+  }
+  
+  /* アイコンがないボタンはテキストを表示 */
+  .ant-btn:not(:has(.anticon)) {
+    min-width: auto;
+  }
+  
+  /* ボタンのサイズを調整 */
+  .ant-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* テーブルの横スクロール対応 */
+.ant-table-wrapper {
+  overflow-x: auto;
+}
+
+/* 新しいタブレット対応 (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* タブレット用の中程度サイズ調整 */
+  .ant-card-body {
+    padding: 16px !important;
+  }
+  
+  .ant-layout-content {
+    padding: 20px !important;
+  }
+  
+  /* フォーム要素の調整 */
+  .ant-input, .ant-select-selector {
+    font-size: 14px;
+  }
+  
+  /* ボタンのサイズ */
+  .ant-btn {
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+}
+
+/* モバイル (576px 以下) */
+@media (max-width: 576px) {
+  /* Card spacing improvements */
+  .ant-card-head {
+    padding: 0 12px;
+    min-height: 44px;
+  }
+  
+  .ant-card-head-title {
+    font-size: 14px;
+  }
+  
+  .ant-card-body {
+    padding: 12px !important;
+  }
+  
+  /* Form improvements */
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+  
+  .ant-form-item-label {
+    padding-bottom: 4px;
+  }
+  
+  .ant-form-item-label > label {
+    font-size: 13px;
+  }
+  
+  /* Input improvements */
+  .ant-input {
+    padding: 8px 11px;
+    font-size: 14px;
+  }
+  
+  .ant-select-selector {
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+  
+  /* Modal improvements */
+  .ant-modal-header {
+    padding: 16px;
+  }
+  
+  .ant-modal-body {
+    padding: 16px;
+  }
+  
+  .ant-modal-footer {
+    padding: 12px 16px;
+  }
+  
+  /* Tooltip improvements */
+  .ant-tooltip-inner {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+  
+  /* Steps improvements */
+  .ant-steps-item-title {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  
+  .ant-steps-item-description {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  
+  /* Drawer improvements */
+  .ant-drawer-header {
+    padding: 16px;
+  }
+  
+  .ant-drawer-body {
+    padding: 16px;
+  }
+  
+  /* Alert improvements */
+  .ant-alert {
+    font-size: 13px;
+  }
+  
+  .ant-alert-message {
+    font-size: 13px;
+  }
+}
+
+/* 超小画面対応 (360px 以下) */
+@media (max-width: 360px) {
+  /* さらに小さな画面での調整 */
+  .ant-layout-header {
+    padding: 0 8px !important;
+  }
+  
+  .ant-layout-content {
+    padding: 8px 4px !important;
+    margin: 8px 4px !important;
+  }
+  
+  /* Typography scaling */
+  h1 {
+    font-size: 18px !important;
+  }
+  
+  h2 {
+    font-size: 16px !important;
+  }
+  
+  h3 {
+    font-size: 14px !important;
+  }
+  
+  /* Button improvements */
+  .ant-btn-sm {
+    padding: 2px 6px;
+    font-size: 11px;
+    min-width: auto;
+  }
+  
+  /* Table improvements for very small screens */
+  .ant-table-tbody > tr > td {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+  
+  .ant-table-thead > tr > th {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+}
+
+/* タッチデバイス向けの改善 */
+@media (pointer: coarse) {
+  /* タッチターゲットの最小サイズを確保 */
+  .ant-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+  }
+  
+  .ant-input {
+    min-height: 44px;
+  }
+  
+  .ant-select-selector {
+    min-height: 44px;
+  }
+  
+  .ant-checkbox-wrapper {
+    min-height: 44px;
+    padding: 8px 0;
+  }
+  
+  .ant-radio-wrapper {
+    min-height: 44px;
+    padding: 8px 0;
+  }
+  
+  /* リンクとタップ可能要素の改善 */
+  .ant-menu-item {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  /* アニメーションを減らす */
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 高DPI画面での改善 */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .ant-avatar, .ant-image {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
