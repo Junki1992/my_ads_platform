@@ -22,6 +22,7 @@ import {
   Popconfirm,
   Select
 } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { 
   UploadOutlined, 
   DownloadOutlined, 
@@ -95,6 +96,7 @@ interface ColumnMapping {
 }
 
 const BulkUpload: React.FC = () => {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<CampaignData[]>([]);
@@ -470,7 +472,7 @@ const BulkUpload: React.FC = () => {
 
   const steps = [
     {
-      title: 'CSVファイル選択',
+      title: t('csvFileSelection'),
       content: (
     <div>
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
@@ -478,14 +480,14 @@ const BulkUpload: React.FC = () => {
               fontSize: 'clamp(18px, 4vw, 24px)',
               marginBottom: 16 
             }}>
-              CSVファイルを選択してください
+              {t('selectCsvFile')}
             </Title>
             <Text type="secondary" style={{
               fontSize: 'clamp(12px, 3vw, 14px)',
               display: 'block',
               marginBottom: 'clamp(24px, 6vw, 32px)'
             }}>
-              Meta広告の一括入稿用CSVファイルをアップロードしてください
+              {t('metaAdBulkUploadCsvDescription')}
             </Text>
 
             <div style={{ 
@@ -524,14 +526,14 @@ const BulkUpload: React.FC = () => {
                   fontSize: 'clamp(14px, 3.5vw, 18px)',
                   marginBottom: 'clamp(4px, 1vw, 8px)'
                 }}>
-                  {isUploading ? 'ファイル処理中...' : 'CSVファイルをドラッグ&ドロップまたは'}
+                  {isUploading ? t('fileProcessing') : t('dragDropCsvFile')}
                 </p>
                 <p className="ant-upload-hint" style={{
                   fontSize: 'clamp(11px, 2.5vw, 14px)',
                   color: '#999',
                   marginBottom: 'clamp(8px, 2vw, 16px)'
                 }}>
-                  CSV、Excel（.xlsx/.xls）ファイルに対応しています
+                  {t('csvExcelSupported')}
                 </p>
                 {!isUploading && (
                 <Button
@@ -544,7 +546,7 @@ const BulkUpload: React.FC = () => {
                       padding: '0 clamp(16px, 4vw, 24px)'
                     }}
                   >
-                    ファイルを選択
+                    {t('selectFile')}
                 </Button>
                 )}
               </Upload.Dragger>
@@ -565,7 +567,7 @@ const BulkUpload: React.FC = () => {
                   maxWidth: '300px'
                 }}
               >
-                CSVテンプレートをダウンロード
+                {t('downloadCsvTemplate')}
               </Button>
             </div>
 
@@ -581,13 +583,13 @@ const BulkUpload: React.FC = () => {
                 <Card size="small" style={{ textAlign: 'left' }}>
                   <div style={{ marginBottom: '12px' }}>
                     <Text strong style={{ fontSize: 'clamp(14px, 3.5vw, 16px)' }}>
-                      Meta広告アカウント選択
+                      {t('metaAdAccountSelection')}
                     </Text>
                   </div>
                   <Select
                     value={selectedAccountId}
                     onChange={setSelectedAccountId}
-                    placeholder="アカウントを選択してください"
+                    placeholder={t('selectAccount')}
                     style={{ width: '100%' }}
                     size="large"
                   >
@@ -607,7 +609,7 @@ const BulkUpload: React.FC = () => {
                     fontSize: 'clamp(11px, 2.5vw, 12px)', 
                     color: '#666' 
                   }}>
-                    選択したアカウントにキャンペーンが作成されます
+                    {t('selectedAccountCampaigns')}
                   </div>
                 </Card>
               </div>
@@ -615,13 +617,12 @@ const BulkUpload: React.FC = () => {
           </div>
 
           <Alert
-            message="CSVファイルの仕様"
+            message={t('csvFileSpecifications')}
             description={
               <div style={{ marginTop: 'clamp(16px, 4vw, 24px)' }}>
-                <div style={{ marginBottom: '8px' }}>• CSVファイルには必須項目（キャンペーン名、目的、セット名、広告名など）が含まれている必要があります</div>
-                <div style={{ marginBottom: '8px' }}>• 日付は「YYYY-MM-DD」形式で記述してください</div>
-                <div style={{ marginBottom: '8px' }}>• URLは完全な形式（https://...）で記述してください</div>
-                <div>• 地域や興味関心はカンマ区切りで複数指定可能です</div>
+                {t('csvFileSpecificationsDesc').split('\n').map((line, index) => (
+                  <div key={index} style={{ marginBottom: '8px' }}>{line}</div>
+                ))}
               </div>
             }
             type="info"
@@ -636,7 +637,7 @@ const BulkUpload: React.FC = () => {
       ),
     },
     {
-      title: 'データ確認',
+      title: t('dataConfirmation'),
       content: (
         <div>
           <div style={{ marginBottom: 'clamp(24px, 5vw, 32px)' }}>
@@ -644,7 +645,7 @@ const BulkUpload: React.FC = () => {
               fontSize: 'clamp(16px, 4vw, 20px)',
               marginBottom: 'clamp(16px, 4vw, 24px)'
             }}>
-              データサマリー
+              {t('dataSummary')}
             </Title>
             <Row gutter={[16, 16]}>
               <Col xs={12} sm={12} md={6} lg={3} style={{ padding: '8px' }}>
@@ -672,7 +673,7 @@ const BulkUpload: React.FC = () => {
                     color: '#666',
                     lineHeight: 1.2
                   }}>
-                    総キャンペーン数
+                    {t('totalCampaigns')}
                   </div>
             </Card>
           </Col>
@@ -703,7 +704,7 @@ const BulkUpload: React.FC = () => {
                     color: '#666',
                     lineHeight: 1.2
                   }}>
-                    有効データ
+                    {t('validData')}
                   </div>
       </Card>
             </Col>
@@ -734,7 +735,7 @@ const BulkUpload: React.FC = () => {
                     color: '#666',
                     lineHeight: 1.2
                   }}>
-                    エラーあり
+                    {t('errorData')}
                   </div>
                 </Card>
             </Col>
@@ -764,7 +765,7 @@ const BulkUpload: React.FC = () => {
                     color: '#666',
                     lineHeight: 1.2
                   }}>
-                    投稿可能数
+                    {t('submissionPossible')}
                   </div>
                 </Card>
             </Col>
@@ -923,14 +924,14 @@ const BulkUpload: React.FC = () => {
           lineHeight: 1.2,
           marginBottom: 12
         }}>
-          Meta広告 CSV一括入稿
+          {t('metaAdCsvBulkUpload')}
         </Title>
         <Text type="secondary" style={{
           fontSize: 'clamp(12px, 3vw, 16px)',
           lineHeight: 1.4,
           display: 'block'
         }}>
-          個別入稿と同じ設定項目をサポートするCSVファイルから一括で広告入稿を行います。
+          {t('metaAdCsvBulkUploadDescription')}
         </Text>
       </div>
 
@@ -953,15 +954,15 @@ const BulkUpload: React.FC = () => {
           size="default"
           items={[
             { 
-              title: isMobile ? 'ファイル選択' : 'CSVファイル選択', 
+              title: isMobile ? t('fileSelection') : t('csvFileSelection'), 
               status: currentStep === 0 ? 'process' : currentStep > 0 ? 'finish' : 'wait' 
             },
             { 
-              title: isMobile ? 'データ確認' : 'データ確認', 
+              title: t('dataConfirmation'), 
               status: currentStep === 1 ? 'process' : currentStep > 1 ? 'finish' : 'wait' 
             },
             { 
-              title: isMobile ? '投稿実行' : '投稿実行', 
+              title: t('submissionExecution'), 
               status: currentStep === 2 ? 'process' : 'wait' 
             }
           ]}
@@ -1009,7 +1010,7 @@ const BulkUpload: React.FC = () => {
                 }}
                 size={isMobile ? 'small' : 'middle'}
               >
-                {isMobile ? '次へ' : '次のステップへ'}
+                {isMobile ? t('next') : t('nextStep')}
              </Button>
             )}
           </div>

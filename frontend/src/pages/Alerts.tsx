@@ -23,6 +23,7 @@ import {
   Tooltip,
   Popconfirm
 } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   PlusOutlined,
   EditOutlined,
@@ -49,6 +50,7 @@ interface Campaign {
 }
 
 const Alerts: React.FC = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('rules');
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [notifications, setNotifications] = useState<AlertNotification[]>([]);
@@ -78,7 +80,7 @@ const Alerts: React.FC = () => {
       setAlertStats(statsData);
       setCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
     } catch (error) {
-      message.error('データの取得に失敗しました');
+      message.error(t('dataFetchError'));
       console.error('Failed to fetch data:', error);
       // エラー時は空配列を設定
       setAlertRules([]);
@@ -108,10 +110,10 @@ const Alerts: React.FC = () => {
 
       if (editingRule?.id) {
         await alertService.updateAlertRule(editingRule.id, ruleData);
-        message.success('アラートルールを更新しました');
+        message.success(t('alertRuleUpdated'));
       } else {
         await alertService.createAlertRule(ruleData);
-        message.success('アラートルールを作成しました');
+        message.success(t('alertRuleCreated'));
       }
 
       setModalVisible(false);
@@ -119,7 +121,7 @@ const Alerts: React.FC = () => {
       form.resetFields();
       fetchData();
     } catch (error) {
-      message.error('アラートルールの保存に失敗しました');
+      message.error(t('alertRuleSaveFailed'));
       console.error('Failed to save rule:', error);
     }
   };
@@ -128,10 +130,10 @@ const Alerts: React.FC = () => {
   const handleDeleteRule = async (id: number) => {
     try {
       await alertService.deleteAlertRule(id);
-      message.success('アラートルールを削除しました');
+      message.success(t('alertRuleDeleted'));
       fetchData();
     } catch (error) {
-      message.error('アラートルールの削除に失敗しました');
+      message.error(t('alertRuleDeleteFailed'));
       console.error('Failed to delete rule:', error);
     }
   };
@@ -143,7 +145,7 @@ const Alerts: React.FC = () => {
       message.success(result.message);
       fetchData();
     } catch (error) {
-      message.error('アラートルールの切り替えに失敗しました');
+      message.error(t('alertRuleToggleFailed'));
       console.error('Failed to toggle rule:', error);
     }
   };
@@ -158,7 +160,7 @@ const Alerts: React.FC = () => {
       message.success(result.message);
       fetchData();
     } catch (error) {
-      message.error('テスト通知の送信に失敗しました');
+      message.error(t('testNotificationFailed'));
       console.error('Failed to test rule:', error);
     }
   };
@@ -173,10 +175,10 @@ const Alerts: React.FC = () => {
       };
       
       await alertService.updateAlertSettings(settingsData);
-      message.success('アラート設定を更新しました');
+      message.success(t('alertSettingsUpdated'));
       fetchData();
     } catch (error) {
-      message.error('アラート設定の更新に失敗しました');
+      message.error(t('alertSettingsUpdateFailed'));
       console.error('Failed to save settings:', error);
     }
   };
@@ -184,31 +186,31 @@ const Alerts: React.FC = () => {
   // アラートルールテーブルの列定義
   const ruleColumns = [
     {
-      title: 'ルール名',
+      title: t('ruleName'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: AlertRule) => (
         <Space direction="vertical" size={0}>
           <strong>{text}</strong>
           <Tag color={record.is_active ? 'green' : 'default'}>
-            {record.is_active ? '有効' : '無効'}
+            {record.is_active ? t('active') : t('inactive')}
           </Tag>
         </Space>
       )
     },
     {
-      title: 'アラートタイプ',
+      title: t('alertType'),
       dataIndex: 'alert_type',
       key: 'alert_type',
       render: (type: string) => {
         const typeMap: { [key: string]: { color: string; text: string } } = {
-          'BUDGET_THRESHOLD': { color: 'orange', text: '予算閾値' },
-          'PERFORMANCE_DROP': { color: 'red', text: 'パフォーマンス低下' },
-          'CAMPAIGN_PAUSED': { color: 'blue', text: 'キャンペーン停止' },
-          'API_ERROR': { color: 'red', text: 'API エラー' },
-          'BULK_UPLOAD_COMPLETE': { color: 'green', text: '一括入稿完了' },
-          'BULK_UPLOAD_FAILED': { color: 'red', text: '一括入稿失敗' },
-          'CUSTOM': { color: 'purple', text: 'カスタム' }
+          'BUDGET_THRESHOLD': { color: 'orange', text: t('budgetThreshold') },
+          'PERFORMANCE_DROP': { color: 'red', text: t('performanceDrop') },
+          'CAMPAIGN_PAUSED': { color: 'blue', text: t('campaignPaused') },
+          'API_ERROR': { color: 'red', text: t('apiError') },
+          'BULK_UPLOAD_COMPLETE': { color: 'green', text: t('bulkUploadComplete') },
+          'BULK_UPLOAD_FAILED': { color: 'red', text: t('bulkUploadFailed') },
+          'CUSTOM': { color: 'purple', text: t('custom') }
         };
         const config = typeMap[type] || { color: 'default', text: type };
         return <Tag color={config.color}>{config.text}</Tag>;

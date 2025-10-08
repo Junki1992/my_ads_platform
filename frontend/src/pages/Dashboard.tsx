@@ -20,7 +20,7 @@ const Dashboard: React.FC = () => {
       const data = await campaignService.getDashboardStats();
       setStats(data);
     } catch (error) {
-      message.error('データの取得に失敗しました');
+      message.error(t('dataFetchFailed'));
       console.error('Failed to fetch dashboard data:', error);
     } finally {
       setLoading(false);
@@ -35,7 +35,7 @@ const Dashboard: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
         <Spin size="large" />
-        <p style={{ marginTop: 20 }}>データを読み込んでいます...</p>
+        <p style={{ marginTop: 20 }}>{t('loadingData')}</p>
       </div>
     );
   }
@@ -43,7 +43,7 @@ const Dashboard: React.FC = () => {
   if (!stats || !stats.summary) {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
-        <p>データがありません</p>
+        <p>{t('noData')}</p>
       </div>
     );
   }
@@ -122,7 +122,7 @@ const Dashboard: React.FC = () => {
           onClick={fetchDashboardData}
           loading={loading}
         >
-          Meta APIから同期
+          {t('syncFromMetaApi')}
         </Button>
       </div>
       

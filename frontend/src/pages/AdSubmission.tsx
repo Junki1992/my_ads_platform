@@ -27,6 +27,7 @@ import {
   Tag,
   Descriptions
 } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { 
   PlusOutlined, 
   SaveOutlined, 
@@ -53,6 +54,7 @@ const { Step } = Steps;
 interface AdSubmissionProps {}
 
 const AdSubmission: React.FC<AdSubmissionProps> = () => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [currentStep, setCurrentStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -107,63 +109,63 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
   // Meta APIで実際に使用可能なキャンペーン目的（バックエンドのOBJECTIVE_CHOICESに合わせて修正）
   const campaignObjectives = [
     // Meta APIで実際に使用可能なobjective値
-    { value: 'APP_INSTALLS', label: 'アプリインストール' },
-    { value: 'BRAND_AWARENESS', label: 'ブランド認知度' },
-    { value: 'EVENT_RESPONSES', label: 'イベント参加' },
-    { value: 'LEAD_GENERATION', label: 'リード獲得' },
-    { value: 'LINK_CLICKS', label: 'リンククリック' },
-    { value: 'LOCAL_AWARENESS', label: 'ローカル認知度' },
-    { value: 'MESSAGES', label: 'メッセージ' },
-    { value: 'OFFER_CLAIMS', label: 'オファー請求' },
-    { value: 'PAGE_LIKES', label: 'ページいいね' },
-    { value: 'POST_ENGAGEMENT', label: '投稿エンゲージメント' },
-    { value: 'PRODUCT_CATALOG_SALES', label: 'カタログ販売' },
-    { value: 'REACH', label: 'リーチ' },
-    { value: 'STORE_VISITS', label: '店舗訪問' },
-    { value: 'VIDEO_VIEWS', label: '動画再生回数' },
+    { value: 'APP_INSTALLS', label: t('appInstalls') },
+    { value: 'BRAND_AWARENESS', label: t('brandAwareness') },
+    { value: 'EVENT_RESPONSES', label: t('eventResponses') },
+    { value: 'LEAD_GENERATION', label: t('leadGeneration') },
+    { value: 'LINK_CLICKS', label: t('linkClicks') },
+    { value: 'LOCAL_AWARENESS', label: t('localAwareness') },
+    { value: 'MESSAGES', label: t('messages') },
+    { value: 'OFFER_CLAIMS', label: t('offerClaims') },
+    { value: 'PAGE_LIKES', label: t('pageLikes') },
+    { value: 'POST_ENGAGEMENT', label: t('postEngagement') },
+    { value: 'PRODUCT_CATALOG_SALES', label: t('productCatalogSales') },
+    { value: 'REACH', label: t('reach') },
+    { value: 'STORE_VISITS', label: t('storeVisits') },
+    { value: 'VIDEO_VIEWS', label: t('videoViews') },
     
     // Outcome系（Meta APIで推奨される新しいobjective）
-    { value: 'OUTCOME_AWARENESS', label: '認知度' },
-    { value: 'OUTCOME_ENGAGEMENT', label: 'エンゲージメント' },
-    { value: 'OUTCOME_LEADS', label: 'リード' },
-    { value: 'OUTCOME_SALES', label: '売上' },
-    { value: 'OUTCOME_TRAFFIC', label: 'トラフィック' },
-    { value: 'OUTCOME_APP_PROMOTION', label: 'アプリプロモーション' },
+    { value: 'OUTCOME_AWARENESS', label: t('outcomeAwareness') },
+    { value: 'OUTCOME_ENGAGEMENT', label: t('outcomeEngagement') },
+    { value: 'OUTCOME_LEADS', label: t('outcomeLeads') },
+    { value: 'OUTCOME_SALES', label: t('outcomeSales') },
+    { value: 'OUTCOME_TRAFFIC', label: t('outcomeTraffic') },
+    { value: 'OUTCOME_APP_PROMOTION', label: t('outcomeAppPromotion') },
     
     // 最も一般的なコンバージョン系objective
-    { value: 'CONVERSIONS', label: 'コンバージョン' }
+    { value: 'CONVERSIONS', label: t('conversions') }
   ];
 
   // 実際の配信先プラットフォーム
   const placements = [
-    { value: 'facebook_feed', label: 'Facebook Feed' },
-    { value: 'facebook_story', label: 'Facebook Story' },
-    { value: 'instagram_feed', label: 'Instagram Feed' },
-    { value: 'instagram_story', label: 'Instagram Story' },
-    { value: 'messenger', label: 'Messenger' },
-    { value: 'audience_network', label: 'Audience Network' }
+    { value: 'facebook_feed', label: t('facebookFeed') },
+    { value: 'facebook_story', label: t('facebookStory') },
+    { value: 'instagram_feed', label: t('instagramFeed') },
+    { value: 'instagram_story', label: t('instagramStory') },
+    { value: 'messenger', label: t('messenger') },
+    { value: 'audience_network', label: t('audienceNetwork') }
   ];
 
   // 実際のCTAオプション
   const ctaOptions = [
-    { value: 'LEARN_MORE', label: '詳細を見る' },
-    { value: 'SHOP_NOW', label: '今すぐ購入' },
-    { value: 'SIGN_UP', label: '登録' },
-    { value: 'DOWNLOAD', label: 'ダウンロード' },
-    { value: 'GET_QUOTE', label: '見積もりを取得' },
-    { value: 'CALL_NOW', label: '今すぐ電話' }
+    { value: 'LEARN_MORE', label: t('learnMore') },
+    { value: 'SHOP_NOW', label: t('shopNow') },
+    { value: 'SIGN_UP', label: t('signUp') },
+    { value: 'DOWNLOAD', label: t('download') },
+    { value: 'GET_QUOTE', label: t('getQuote') },
+    { value: 'CALL_NOW', label: t('callNow') }
   ];
 
   const [forceRender, setForceRender] = useState(0);
 
   const steps = [
     {
-      title: 'キャンペーン設定',
+      title: t('campaignSettings'),
       icon: <SettingOutlined />,
       content: (
         <div>
           <Alert
-            message="重要：誤配信を防ぐため、キャンペーンは初期状態で「オフ」に設定されます"
+            message={t('importantNotice')}
             type="warning"
             showIcon
             style={{ marginBottom: 24 }}
@@ -173,11 +175,11 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             <Col span={24}>
               <Form.Item
                 name="campaign_name"
-                label={<span>キャンペーン名 <Text type="secondary">*</Text></span>}
-                rules={[{ required: true, message: 'キャンペーン名を入力してください' }]}
+                label={<span>{t('campaignName')} <Text type="secondary">*</Text></span>}
+                rules={[{ required: true, message: t('campaignNameRequired') }]}
               >
                 <Input 
-                  placeholder="例：新商品プロモーション_2024年1月"
+                  placeholder={t('campaignNamePlaceholder')}
                   size={isMobile ? 'middle' : 'large'}
                 />
               </Form.Item>
@@ -187,11 +189,11 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
           {/* Metaアカウント選択 */}
           <Form.Item
             name="meta_account_id"
-            label={<span>Meta入稿アカウント <Text type="secondary">*</Text></span>}
-            rules={[{ required: true, message: 'Metaアカウントを選択してください' }]}
+            label={<span>{t('metaAccount')} <Text type="secondary">*</Text></span>}
+            rules={[{ required: true, message: t('metaAccountRequired') }]}
           >
             <Select 
-              placeholder="投稿先のMetaアカウントを選択してください"
+              placeholder={t('metaAccountPlaceholder')}
               size={isMobile ? 'middle' : 'large'}
               value={selectedMetaAccount}
               onChange={(value) => setSelectedMetaAccount(value)}
@@ -206,8 +208,8 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
 
           {metaAccounts.length === 0 && (
             <Alert
-              message="Metaアカウントが登録されていません"
-              description="まず設定画面でMetaアカウントを登録してから広告入稿を行ってください。"
+              message={t('metaAccountNotRegistered')}
+              description={t('metaAccountNotRegisteredDesc')}
               type="warning"
               showIcon
               style={{ marginBottom: 24 }}
@@ -216,11 +218,11 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
 
           <Form.Item
             name="objective"
-            label={<span>キャンペーンの目的 <Text type="secondary">*</Text></span>}
-            rules={[{ required: true, message: '目的を選択してください' }]}
+            label={<span>{t('objective')} <Text type="secondary">*</Text></span>}
+            rules={[{ required: true, message: t('campaignObjectiveRequired') }]}
           >
             <Select 
-              placeholder="どのような成果を重視しますか？"
+              placeholder={t('campaignObjectivePlaceholder')}
               size={isMobile ? 'middle' : 'large'}
             >
               {campaignObjectives.map(obj => (
@@ -233,26 +235,26 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
 
           <Divider />
           
-          <Title level={5}>予算設定</Title>
+          <Title level={5}>{t('budgetSettings')}</Title>
           
           <Row gutter={isMobile ? 16 : 24}>
             <Col span={12}>
               <Form.Item
                 name="budget_type"
-                label={<span>予算の種類 <Text type="secondary">*</Text></span>}
-                rules={[{ required: true }]}
+                label={<span>{t('budgetType')} <Text type="secondary">*</Text></span>}
+                rules={[{ required: true, message: t('budgetTypeRequired') }]}
               >
                 <Radio.Group size="large" style={{ width: '100%', display: 'flex' }}>
                   <Radio.Button value="DAILY" style={{ flex: 1 }}>
                     <div>
-                      <div>日予算</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>毎日設定した金額まで</div>
+                      <div>{t('dailyBudget')}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>{t('dailyBudgetDesc')}</div>
                     </div>
                   </Radio.Button>
                   <Radio.Button value="LIFETIME" style={{ flex: 1 }}>
                     <div>
-                      <div>通算予算</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>キャンペーン全体で設定した金額まで</div>
+                      <div>{t('lifetimeBudget')}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>{t('lifetimeBudgetDesc')}</div>
                     </div>
                   </Radio.Button>
                 </Radio.Group>
@@ -261,16 +263,16 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             <Col span={12}>
               <Form.Item
                 name="budget"
-                label={<span>予算金額 <Text type="secondary">*</Text></span>}
-                rules={[{ required: true, message: '予算を設定してください' }]}
+                label={<span>{t('budget')} <Text type="secondary">*</Text></span>}
+                rules={[{ required: true, message: t('budgetAmountRequired') }]}
               >
                 <InputNumber 
-                  placeholder="1000" 
+                  placeholder={t('budgetAmountPlaceholder')} 
                   min={100} 
                   max={1000000}
                   style={{ width: '100%' }}
                   size={isMobile ? 'middle' : 'large'}
-                  addonAfter="円"
+                  addonAfter={t('yen')}
                 />
               </Form.Item>
             </Col>
@@ -280,8 +282,8 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             name="budget_optimization"
             label={
               <span>
-                キャンペーン予算最適化 
-                <Tooltip title="Metaが自動的に最適な配信タイミングで予算を調整します">
+                {t('budgetOptimization')} 
+                <Tooltip title={t('budgetOptimizationTooltip')}>
                   <InfoCircleOutlined style={{ marginLeft: 8 }} />
                 </Tooltip>
               </span>
@@ -290,41 +292,41 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             <Switch 
               checked={budgetOptimization}
               onChange={setBudgetOptimization}
-              checkedChildren="有効" 
-              unCheckedChildren="無効"
+              checkedChildren={t('enabled')} 
+              unCheckedChildren={t('disabled')}
             />
             {budgetOptimization && (
               <Text type="secondary" style={{ marginLeft: 16 }}>
-                キャンペーン全体の成果を最大化するよう自動調整されます
+                {t('budgetOptimizationDesc')}
               </Text>
             )}
           </Form.Item>
 
           <Divider />
           
-          <Title level={5}>入札戦略</Title>
+          <Title level={5}>{t('biddingStrategy')}</Title>
           
           <Form.Item
             name="bid_strategy"
-            rules={[{ required: true, message: '入札戦略を選択してください' }]}
+            rules={[{ required: true, message: t('biddingStrategyRequired') }]}
           >
             <Radio.Group size="large">
               <Radio.Button value="LOWEST_COST_WITHOUT_CAP">
                 <div>
-                  <div style={{ fontWeight: 'bold' }}>最小コスト（上限なし）</div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>最も低い単価で可能な多数の成果を得る</div>
+                  <div style={{ fontWeight: 'bold' }}>{t('lowestCostNoCap')}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{t('lowestCostNoCapDesc')}</div>
                 </div>
               </Radio.Button>
               <Radio.Button value="COST_CAP">
                 <div>
-                  <div style={{ fontWeight: 'bold' }}>コスト上限</div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>設定上限を超えずに目標数を達成</div>
+                  <div style={{ fontWeight: 'bold' }}>{t('costCap')}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{t('costCapDesc')}</div>
                 </div>
               </Radio.Button>
               <Radio.Button value="LOWEST_COST_WITH_BID_CAP">
                 <div>
-                  <div style={{ fontWeight: 'bold' }}>最小コスト（入札上限付き）</div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>入札価格の上限を設定して最小コストで配信</div>
+                  <div style={{ fontWeight: 'bold' }}>{t('lowestCostWithBidCap')}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{t('lowestCostWithBidCapDesc')}</div>
                 </div>
               </Radio.Button>
             </Radio.Group>
@@ -334,13 +336,13 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             <Col span={12}>
               <Form.Item
                 name="start_date"
-                label={<span>キャンペーンスタート日 <Text type="secondary">*</Text></span>}
+                label={<span>{t('startDate')} <Text type="secondary">*</Text></span>}
                 rules={[
-                  { required: true, message: '開始日を選択してください' },
+                  { required: true, message: t('campaignStartDateRequired') },
                   {
                     validator: (_, value) => {
                       if (!value) {
-                        return Promise.reject(new Error('開始日を選択してください'));
+                        return Promise.reject(new Error(t('campaignStartDateRequired')));
                       }
                       return Promise.resolve();
                     }
@@ -350,7 +352,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                 <DatePicker 
                   style={{ width: '100%' }}
                   size={isMobile ? 'middle' : 'large'}
-                  placeholder="2024/01/01"
+                  placeholder={t('campaignStartDatePlaceholder')}
                   format="YYYY-MM-DD"
                   showToday={false}
                 />
@@ -359,12 +361,12 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             <Col span={12}>
               <Form.Item 
                 name="end_date"
-                label="キャンペーン終了日"
+                label={t('campaignEndDate')}
               >
                 <DatePicker 
                   style={{ width: '100%' }}
                   size={isMobile ? 'middle' : 'large'}
-                  placeholder="継続の場合も選択可能"
+                  placeholder={t('campaignEndDatePlaceholder')}
                   format="YYYY-MM-DD"
                   showToday={false}
                 />
@@ -377,8 +379,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
               <div>
                 <Text type="secondary">
                   <InfoCircleOutlined style={{ marginRight: 8 }} />
-                  キャンペーンが有効な間は、予算設定以上の金額は使用されません。
-                  通算予算を使用した場合、1日あたりの予算は自動調整されます。
+                  {t('budgetInfo')}
                 </Text>
               </div>
             }
@@ -390,7 +391,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
       ),
     },
     {
-      title: 'セット設定',
+      title: t('setSettings'),
       icon: <TagOutlined />,
       content: (
         <div>
@@ -581,7 +582,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
       ),
     },
     {
-      title: '広告作成',
+      title: t('adCreation'),
       icon: <PlayCircleOutlined />,
       content: (
         <div>
@@ -939,7 +940,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
       ),
     },
     {
-      title: '確認・投稿',
+      title: t('confirmationSubmission'),
       icon: <EyeOutlined />,
       content: (
         <div>
@@ -1498,10 +1499,10 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
       <Card>
         <div style={{ marginBottom: 32 }}>
           <Title level={2} style={{ marginBottom: 8 }}>
-            Meta広告入稿システム
+            {t('metaAdSubmissionSystem')}
           </Title>
           <Text type="secondary">
-            Meta広告を効率的に作成・管理できる専門ツールです。以下の手順に従って設定を完了してください。
+            {t('metaAdSubmissionDescription')}
           </Text>
         </div>
 
@@ -1553,14 +1554,14 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                 size="small"
                 style={{ marginRight: 8 }}
               >
-                テスト値を設定
+                {t('testValuesSet')}
               </Button>
               <Button 
                 onClick={logFormValues}
                 type="dashed"
                 size="small"
               >
-                フォーム値を確認
+                {t('checkFormValues')}
               </Button>
               <Button 
                 onClick={() => {
@@ -1570,7 +1571,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                 size="small"
                 style={{ marginLeft: 8 }}
               >
-                フォーム値確認
+                {t('formValuesCheck')}
               </Button>
               <Button 
                 onClick={() => {
@@ -1596,7 +1597,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                 size="small"
                 style={{ marginLeft: 8 }}
               >
-                画像デバッグ
+                {t('imageDebug')}
               </Button>
             </div>
           )}
@@ -1608,7 +1609,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
             size={isMobile ? 'middle' : 'large'}
             style={{ marginRight: 16 }}
           >
-            前へ戻る
+            {t('previous')}
           </Button>
           
           {currentStep === steps.length - 1 ? (
@@ -1649,7 +1650,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                       console.log('個別フィールド取得の結果:', individualValues);
                       
                       if (Object.keys(individualValues).length === 0) {
-                        message.error("フォームに値を入力してください");
+                        message.error(t('formValuesEmpty'));
                         return;
                       }
                       
@@ -1663,11 +1664,11 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                   }
                 } catch (error) {
                   console.error('送信エラー:', error);
-                  message.error("必須項目を正しく入力してください");
+                  message.error(t('requiredFieldsIncomplete'));
                 }
               }}
             >
-              広告を投稿する
+              {t('submitAd')}
             </Button>
           ) : (
             <Button 
@@ -1676,7 +1677,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
               icon={<RightOutlined />}
               size={isMobile ? 'middle' : 'large'}
             >
-              次のステップへ
+              {t('nextStep')}
             </Button>
           )}
         </div>

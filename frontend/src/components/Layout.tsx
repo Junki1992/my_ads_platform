@@ -51,7 +51,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
   // デモユーザー制限のためのナビゲーション
   const handleNavigate = (path: string) => {
     if (path === '/ad-submission' && user?.is_demo_user) {
-      message.warning('デモユーザーのため、広告入稿機能は制限されています');
+      message.warning(t('demoUserRestriction'));
       return;
     }
     navigate(path);
@@ -103,7 +103,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
     {
       key: '/alerts',
       icon: <BellOutlined />,
-      label: 'アラート',
+      label: t('alerts'),
       onClick: () => handleNavigate('/alerts'),
     },
     {
@@ -158,7 +158,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
           padding: '0 8px'
         }}>
           <span></span>
-          <span style={{ color: 'white', fontSize: '12px' }}>Menu</span>
+          <span style={{ color: 'white', fontSize: '12px' }}>{t('menu')}</span>
                     {!sidebarCollapsed && (
                       <Button
                         type="text"
@@ -171,7 +171,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
                           height: 'auto',
                           lineHeight: 1
                         }}
-                        title="折りたたむ"
+                        title={t('collapse')}
                       />
                     )}
         </div>
@@ -187,7 +187,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
 
       {/* モバイル用Drawer */}
       <Drawer
-        title="メニュー"
+        title={t('menu')}
         placement="left"
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
@@ -205,7 +205,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
           justifyContent: 'center',
           padding: '0 8px'
         }}>
-          <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>Menu</span>
+          <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>{t('menu')}</span>
         </div>
         <Menu
           theme="dark"
@@ -237,7 +237,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
               width: isMobile ? 48 : 64,
               height: isMobile ? 48 : 64,
             }}
-            title={isMobile ? "メニューを開く" : (sidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")}
+            title={isMobile ? t('openMenu') : (sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar'))}
           />
           
           <Space size={isMobile ? 'small' : 'middle'}>
@@ -266,8 +266,8 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
         {/* デモユーザー制限アラート */}
         {user?.is_demo_user && (
           <Alert
-            message="デモモード"
-            description="現在はデモアカウント制限モードです。広告入稿機能は制限されていますが、UIの操作とプレビュー機能はご利用いただけます。"
+            message={t('demoMode')}
+            description={t('demoModeDescription')}
             type="info"
             showIcon
             closable
