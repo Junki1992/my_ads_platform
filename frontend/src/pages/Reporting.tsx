@@ -59,7 +59,7 @@ const Reporting: React.FC = () => {
       const data = await campaignService.getReportingData(params);
       setReportingData(data);
     } catch (error) {
-      message.error('レポートデータの取得に失敗しました');
+      message.error(t('reportingDataFetchError'));
       console.error('Failed to fetch reporting data:', error);
     } finally {
       setLoading(false);
@@ -78,7 +78,7 @@ const Reporting: React.FC = () => {
     }
 
     return reportingData.campaigns.map((campaign, index) => ({
-      name: campaign.campaign_name,
+      name: campaign.campaign_name, // 実際のキャンペーン名をそのまま表示
       impressions: campaign.impressions,
       clicks: campaign.clicks,
       spend: campaign.spend,
@@ -89,59 +89,59 @@ const Reporting: React.FC = () => {
   // テーブルカラム定義
   const columns = [
     {
-      title: 'キャンペーン名',
+      title: t('campaignName'),
       dataIndex: 'campaign_name',
       key: 'campaign_name',
       width: 200,
     },
     {
-      title: 'ステータス',
+      title: t('status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (status: string) => (
         <Tag color={status === 'ACTIVE' ? 'green' : 'orange'}>
-          {status === 'ACTIVE' ? '有効' : '一時停止'}
+          {status === 'ACTIVE' ? t('active') : t('paused')}
         </Tag>
       ),
     },
     {
-      title: '予算',
+      title: t('budget'),
       dataIndex: 'budget',
       key: 'budget',
       width: 120,
       render: (budget: number) => `¥${budget.toLocaleString()}`,
     },
     {
-      title: '支出',
+      title: t('spend'),
       dataIndex: 'spend',
       key: 'spend',
       width: 120,
       render: (spend: number) => `¥${spend.toLocaleString()}`,
     },
     {
-      title: 'インプレッション',
+      title: t('impressions'),
       dataIndex: 'impressions',
       key: 'impressions',
       width: 120,
       render: (impressions: number) => impressions.toLocaleString(),
     },
     {
-      title: 'クリック数',
+      title: t('clicks'),
       dataIndex: 'clicks',
       key: 'clicks',
       width: 100,
       render: (clicks: number) => clicks.toLocaleString(),
     },
     {
-      title: 'CTR',
+      title: t('ctr'),
       dataIndex: 'ctr',
       key: 'ctr',
       width: 80,
       render: (ctr: number) => `${ctr.toFixed(2)}%`,
     },
     {
-      title: 'CPC',
+      title: t('cpc'),
       dataIndex: 'cpc',
       key: 'cpc',
       width: 80,
@@ -153,7 +153,7 @@ const Reporting: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
         <Spin size="large" />
-        <p style={{ marginTop: 20 }}>レポートデータを読み込んでいます...</p>
+        <p style={{ marginTop: 20 }}>{t('loadingReportingData')}</p>
       </div>
     );
   }
@@ -196,8 +196,8 @@ const Reporting: React.FC = () => {
             >
               <Option value="impressions">{t('impressions')}</Option>
               <Option value="clicks">{t('clicks')}</Option>
-              <Option value="spend">支出</Option>
-              <Option value="ctr">CTR</Option>
+              <Option value="spend">{t('spend')}</Option>
+              <Option value="ctr">{t('ctr')}</Option>
             </Select>
           </Col>
           <Col xs={24} sm={12} md={6}>
@@ -209,7 +209,7 @@ const Reporting: React.FC = () => {
               onClick={fetchReportingData}
               loading={loading}
             >
-              Meta APIから同期
+              {t('syncFromMetaApi')}
             </Button>
           </Col>
         </Row>
@@ -224,7 +224,7 @@ const Reporting: React.FC = () => {
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
                   {reportingData.summary.total_campaigns}
                 </div>
-                <div style={{ color: '#666' }}>総キャンペーン数</div>
+                <div style={{ color: '#666' }}>{t('totalCampaigns')}</div>
               </div>
             </Card>
           </Col>
@@ -234,7 +234,7 @@ const Reporting: React.FC = () => {
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
                   ¥{reportingData.summary.total_spend.toLocaleString()}
                 </div>
-                <div style={{ color: '#666' }}>総支出</div>
+                <div style={{ color: '#666' }}>{t('totalSpend')}</div>
               </div>
             </Card>
           </Col>
@@ -244,7 +244,7 @@ const Reporting: React.FC = () => {
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#faad14' }}>
                   {reportingData.summary.total_impressions.toLocaleString()}
                 </div>
-                <div style={{ color: '#666' }}>総インプレッション</div>
+                <div style={{ color: '#666' }}>{t('totalImpressions')}</div>
               </div>
             </Card>
           </Col>
@@ -254,7 +254,7 @@ const Reporting: React.FC = () => {
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f5222d' }}>
                   {reportingData.summary.total_clicks.toLocaleString()}
                 </div>
-                <div style={{ color: '#666' }}>総クリック数</div>
+                <div style={{ color: '#666' }}>{t('totalClicks')}</div>
               </div>
             </Card>
           </Col>
@@ -263,7 +263,7 @@ const Reporting: React.FC = () => {
 
       <Row gutter={isMobile ? 8 : 16}>
         <Col xs={24} lg={12}>
-          <Card title="キャンペーン一覧">
+          <Card title={t('campaignList')}>
             <Table
               dataSource={reportingData?.campaigns || []}
               columns={columns}
@@ -275,7 +275,7 @@ const Reporting: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="パフォーマンス比較">
+          <Card title={t('performanceComparison')}>
             <ResponsiveContainer 
               width="100%" 
               height={isMobile ? 300 : 400}
@@ -296,17 +296,17 @@ const Reporting: React.FC = () => {
                 <Bar 
                   dataKey="impressions" 
                   fill="#8884d8" 
-                  name="インプレッション"
+                  name={t('impressions')}
                 />
                 <Bar 
                   dataKey="clicks" 
                   fill="#82ca9d" 
-                  name="クリック数"
+                  name={t('clicks')}
                 />
                 <Bar 
                   dataKey="spend" 
                   fill="#ffc658" 
-                  name="支出"
+                  name={t('spend')}
                 />
               </BarChart>
             </ResponsiveContainer>

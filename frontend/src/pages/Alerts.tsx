@@ -103,9 +103,9 @@ const Alerts: React.FC = () => {
         target_campaigns: values.target_campaigns || [],
         email_notification: values.email_notification || false,
         chatwork_message_template: values.chatwork_message_template || 
-          '🚨 アラート: {alert_name}\n📊 キャンペーン: {campaign_name}\n📈 値: {current_value}\n🎯 閾値: {threshold_value}',
+          t('alertMessageTemplate'),
         slack_message_template: values.slack_message_template || 
-          '🚨 *アラート: {alert_name}*\n📊 *キャンペーン:* {campaign_name}\n📈 *値:* {current_value}\n🎯 *閾値:* {threshold_value}'
+          t('alertMessageTemplateSlack')
       };
 
       if (editingRule?.id) {
@@ -154,7 +154,7 @@ const Alerts: React.FC = () => {
   const handleTestRule = async (id: number) => {
     try {
       const result = await alertService.testAlertRule(id, {
-        test_message: 'テスト通知です',
+        test_message: t('testNotification'),
         test_channels: ['DASHBOARD']
       });
       message.success(result.message);
@@ -217,32 +217,32 @@ const Alerts: React.FC = () => {
       }
     },
     {
-      title: '条件',
+      title: t('condition'),
       dataIndex: 'condition',
       key: 'condition',
       render: (condition: string, record: AlertRule) => (
-        <span>{record.threshold_value} {condition === 'GREATER_THAN' ? 'より大きい' : 
-              condition === 'LESS_THAN' ? 'より小さい' : 
-              condition === 'EQUALS' ? 'と等しい' : 
-              condition === 'NOT_EQUALS' ? 'と等しくない' : condition}</span>
+        <span>{record.threshold_value} {condition === 'GREATER_THAN' ? t('greaterThan') : 
+              condition === 'LESS_THAN' ? t('lessThan') : 
+              condition === 'EQUALS' ? t('equals') : 
+              condition === 'NOT_EQUALS' ? t('notEquals') : condition}</span>
       )
     },
     {
-      title: '通知頻度',
+      title: t('notificationFrequency'),
       dataIndex: 'notification_frequency',
       key: 'notification_frequency',
       render: (frequency: string) => {
         const freqMap: { [key: string]: string } = {
-          'IMMEDIATE': '即座',
-          'HOURLY': '1時間毎',
-          'DAILY': '1日毎',
-          'WEEKLY': '1週間毎'
+          'IMMEDIATE': t('immediate'),
+          'HOURLY': t('hourly'),
+          'DAILY': t('daily'),
+          'WEEKLY': t('weekly')
         };
         return freqMap[frequency] || frequency;
       }
     },
     {
-      title: '通知先',
+      title: t('notificationTarget'),
       key: 'channels',
       render: (record: AlertRule) => (
         <Space size={4}>
@@ -254,13 +254,13 @@ const Alerts: React.FC = () => {
       )
     },
     {
-      title: '最終実行',
+      title: t('lastExecution'),
       dataIndex: 'last_triggered',
       key: 'last_triggered',
       render: (date: string) => date ? dayjs(date).format('MM/DD HH:mm') : '-'
     },
     {
-      title: '操作',
+      title: t('actions'),
       key: 'actions',
       render: (record: AlertRule) => (
         <Space>
@@ -271,7 +271,7 @@ const Alerts: React.FC = () => {
               onClick={() => handleTestRule(record.id!)}
             />
           </Tooltip>
-          <Tooltip title={record.is_active ? '無効化' : '有効化'}>
+          <Tooltip title={record.is_active ? t('disable') : t('enable')}>
             <Button
               type="text"
               icon={record.is_active ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
@@ -307,46 +307,46 @@ const Alerts: React.FC = () => {
   // 通知履歴テーブルの列定義
   const notificationColumns = [
     {
-      title: '日時',
+      title: t('dateTime'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => dayjs(date).format('MM/DD HH:mm:ss')
     },
     {
-      title: 'アラートルール',
+      title: t('alertRule'),
       dataIndex: 'alert_rule_name',
       key: 'alert_rule_name'
     },
     {
-      title: 'キャンペーン',
+      title: t('campaign'),
       dataIndex: 'campaign_name',
       key: 'campaign_name',
-      render: (name: string) => name || 'システム'
+      render: (name: string) => name || t('system')
     },
     {
-      title: 'チャンネル',
+      title: t('channel'),
       dataIndex: 'channel',
       key: 'channel',
       render: (channel: string) => {
         const channelMap: { [key: string]: { color: string; text: string } } = {
           'CHATWORK': { color: 'blue', text: 'Chatwork' },
           'SLACK': { color: 'green', text: 'Slack' },
-          'EMAIL': { color: 'orange', text: 'メール' },
-          'DASHBOARD': { color: 'gray', text: 'ダッシュボード' }
+          'EMAIL': { color: 'orange', text: t('email') },
+          'DASHBOARD': { color: 'gray', text: t('dashboard') }
         };
         const config = channelMap[channel] || { color: 'default', text: channel };
         return <Tag color={config.color}>{config.text}</Tag>;
       }
     },
     {
-      title: 'ステータス',
+      title: t('status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
         const statusMap: { [key: string]: { color: string; text: string; icon: React.ReactNode } } = {
-          'SENT': { color: 'success', text: '送信済み', icon: <CheckCircleOutlined /> },
-          'PENDING': { color: 'processing', text: '送信中', icon: <ClockCircleOutlined /> },
-          'FAILED': { color: 'error', text: '失敗', icon: <ExclamationCircleOutlined /> }
+          'SENT': { color: 'success', text: t('sent'), icon: <CheckCircleOutlined /> },
+          'PENDING': { color: 'processing', text: t('pending'), icon: <ClockCircleOutlined /> },
+          'FAILED': { color: 'error', text: t('failed'), icon: <ExclamationCircleOutlined /> }
         };
         const config = statusMap[status] || { color: 'default', text: status, icon: null };
         return (
@@ -357,7 +357,7 @@ const Alerts: React.FC = () => {
       }
     },
     {
-      title: '値',
+      title: t('value'),
       key: 'values',
       render: (record: AlertNotification) => (
         <span>{record.current_value} / {record.threshold_value}</span>
@@ -371,7 +371,7 @@ const Alerts: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="総アラートルール"
+              title={t('totalAlertRules')}
               value={alertStats?.total_rules || 0}
               prefix={<BellOutlined />}
             />
@@ -380,7 +380,7 @@ const Alerts: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="アクティブルール"
+              title={t('activeRules')}
               value={alertStats?.active_rules || 0}
               prefix={<CheckCircleOutlined />}
               valueStyle={{ color: '#3f8600' }}
@@ -390,7 +390,7 @@ const Alerts: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="今日の通知"
+              title={t('todayNotifications')}
               value={alertStats?.notifications_today || 0}
               prefix={<BellOutlined />}
             />
@@ -399,7 +399,7 @@ const Alerts: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="成功率"
+              title={t('successRate')}
               value={alertStats?.success_rate || 0}
               suffix="%"
               prefix={<CheckCircleOutlined />}
@@ -411,7 +411,7 @@ const Alerts: React.FC = () => {
 
       <Card>
         <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane tab="アラートルール" key="rules">
+          <TabPane tab={t('alertRules')} key="rules">
             <div style={{ marginBottom: 16 }}>
               <Button
                 type="primary"
@@ -422,7 +422,7 @@ const Alerts: React.FC = () => {
                   setModalVisible(true);
                 }}
               >
-                アラートルール作成
+                {t('createAlertRule')}
               </Button>
             </div>
             
@@ -435,7 +435,7 @@ const Alerts: React.FC = () => {
             />
           </TabPane>
 
-          <TabPane tab="通知履歴" key="notifications">
+          <TabPane tab={t('notificationHistory')} key="notifications">
             <Table
               columns={notificationColumns}
               dataSource={notifications || []}
@@ -445,7 +445,7 @@ const Alerts: React.FC = () => {
             />
           </TabPane>
 
-          <TabPane tab="設定" key="settings">
+          <TabPane tab={t('settings')} key="settings">
             {alertSettings && (
               <Form
                 layout="vertical"
@@ -458,7 +458,7 @@ const Alerts: React.FC = () => {
               >
                 <Row gutter={[16, 16]}>
                   <Col xs={24} md={12}>
-                    <Card title="基本設定">
+                    <Card title={t('basicSettings')}>
                       <Form.Item
                         name="global_notifications_enabled"
                         label="全体的な通知"
@@ -525,7 +525,7 @@ const Alerts: React.FC = () => {
 
                 <div style={{ textAlign: 'right', marginTop: 16 }}>
                   <Button type="primary" htmlType="submit">
-                    設定を保存
+                    {t('saveSettings')}
                   </Button>
                 </div>
               </Form>
@@ -536,7 +536,7 @@ const Alerts: React.FC = () => {
 
       {/* アラートルール作成・編集モーダル */}
       <Modal
-        title={editingRule ? 'アラートルール編集' : 'アラートルール作成'}
+        title={editingRule ? t('editAlertRule') : t('createAlertRule')}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -556,7 +556,7 @@ const Alerts: React.FC = () => {
               <Form.Item
                 name="name"
                 label="ルール名"
-                rules={[{ required: true, message: 'ルール名を入力してください' }]}
+                rules={[{ required: true, message: t('ruleNameRequired') }]}
               >
                 <Input placeholder="予算不足アラート" />
               </Form.Item>
@@ -566,7 +566,7 @@ const Alerts: React.FC = () => {
               <Form.Item
                 name="alert_type"
                 label="アラートタイプ"
-                rules={[{ required: true, message: 'アラートタイプを選択してください' }]}
+                rules={[{ required: true, message: t('alertTypeRequired') }]}
               >
                 <Select placeholder="アラートタイプを選択">
                   <Option value="BUDGET_THRESHOLD">予算閾値</Option>
@@ -584,7 +584,7 @@ const Alerts: React.FC = () => {
               <Form.Item
                 name="condition"
                 label="条件"
-                rules={[{ required: true, message: '条件を選択してください' }]}
+                rules={[{ required: true, message: t('conditionRequired') }]}
               >
                 <Select placeholder="条件を選択">
                   <Option value="GREATER_THAN">より大きい</Option>
@@ -600,7 +600,7 @@ const Alerts: React.FC = () => {
               <Form.Item
                 name="threshold_value"
                 label="閾値"
-                rules={[{ required: true, message: '閾値を入力してください' }]}
+                rules={[{ required: true, message: t('thresholdRequired') }]}
               >
                 <Input placeholder="80" />
               </Form.Item>
@@ -610,7 +610,7 @@ const Alerts: React.FC = () => {
               <Form.Item
                 name="notification_frequency"
                 label="通知頻度"
-                rules={[{ required: true, message: '通知頻度を選択してください' }]}
+                rules={[{ required: true, message: t('frequencyRequired') }]}
               >
                 <Select placeholder="通知頻度を選択">
                   <Option value="IMMEDIATE">即座</Option>
@@ -645,12 +645,12 @@ const Alerts: React.FC = () => {
                 name="description"
                 label="説明"
               >
-                <TextArea rows={3} placeholder="アラートルールの説明" />
+                <TextArea rows={3} placeholder={t('alertRuleDescription')} />
               </Form.Item>
             </Col>
           </Row>
 
-          <Divider>通知設定</Divider>
+          <Divider>{t('notificationSettings')}</Divider>
 
           <Row gutter={[16, 16]}>
             <Col xs={24} md={12}>
@@ -685,7 +685,7 @@ const Alerts: React.FC = () => {
               <Form.Item
                 name="email_addresses"
                 label="通知先メールアドレス"
-                extra="複数のメールアドレスを設定する場合は、1行に1つずつ入力してください"
+                extra={t('multipleEmailsNote')}
               >
                 <TextArea
                   rows={4}
@@ -731,7 +731,7 @@ const Alerts: React.FC = () => {
               キャンセル
             </Button>
             <Button type="primary" htmlType="submit">
-              {editingRule ? '更新' : '作成'}
+              {editingRule ? t('update') : t('create')}
             </Button>
           </div>
         </Form>
