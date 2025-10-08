@@ -676,5 +676,11 @@
   "saveSettings": "保存设置",
   "alertRuleDescription": "警报规则描述",
   "notificationSettings": "通知设置",
-  "multipleEmailsNote": "要设置多个电子邮件地址，请每行输入一个"
+  "multipleEmailsNote": "要设置多个电子邮件地址，请每行输入一个",
+  "metaApiSubmissionInfo": "要提交到实际的Meta API",
+  "languageRequired": "请选择语言",
+  "step1CreateApp": "在Facebook Developer Console中创建应用",
+  "step2GetToken": "从广告管理系统获取访问令牌",
+  "step3RegisterAccount": "使用下面的\"+ 添加Meta账户\"按钮注册账户信息",
+  "noteValidTokenRequired": "注意：连接到实际的Meta API需要有效的访问令牌。"
 }

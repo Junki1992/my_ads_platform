@@ -747,5 +747,11 @@
   "saveSettings": "設定を保存",
   "alertRuleDescription": "アラートルールの説明",
   "notificationSettings": "通知設定",
-  "multipleEmailsNote": "複数のメールアドレスを設定する場合は、1行に1つずつ入力してください"
+  "multipleEmailsNote": "複数のメールアドレスを設定する場合は、1行に1つずつ入力してください",
+  "metaApiSubmissionInfo": "実際のMeta APIに入稿するには",
+  "languageRequired": "言語を選択してください",
+  "step1CreateApp": "Facebook Developer Consoleでアプリを作成",
+  "step2GetToken": "広告管理システムのアクセストークンを取得",
+  "step3RegisterAccount": "下記「+ Metaアカウントを追加」ボタンでアカウント情報を登録",
+  "noteValidTokenRequired": "注意: 実際のMeta APIに接続するには有効なアクセストークンが必要です。"
 }

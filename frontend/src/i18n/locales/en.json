@@ -744,5 +744,11 @@
   "saveSettings": "Save Settings",
   "alertRuleDescription": "Alert rule description",
   "notificationSettings": "Notification Settings",
-  "multipleEmailsNote": "To set multiple email addresses, enter one per line"
+  "multipleEmailsNote": "To set multiple email addresses, enter one per line",
+  "metaApiSubmissionInfo": "To submit to the actual Meta API",
+  "languageRequired": "Please select a language",
+  "step1CreateApp": "Create an app in Facebook Developer Console",
+  "step2GetToken": "Obtain an access token from the ad management system",
+  "step3RegisterAccount": "Register account information using the \"+ Add Meta Account\" button below",
+  "noteValidTokenRequired": "Note: A valid access token is required to connect to the actual Meta API."
 }

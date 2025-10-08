@@ -292,7 +292,7 @@ const Settings: React.FC = () => {
           <Form.Item
             name="language"
             label={t('language')}
-            rules={[{ required: true, message: 'Language is required' }]}
+            rules={[{ required: true, message: t('languageRequired') }]}
           >
             <Select onChange={(value) => i18n.changeLanguage(value)}>
               <Option value="ja">{t('japanese')}</Option>
@@ -336,14 +336,14 @@ const Settings: React.FC = () => {
         style={{ marginBottom: 24 }}
       >
         <Alert
-          message="実際のMeta APIに入稿するには"
+          message={t('metaApiSubmissionInfo')}
           description={
             <div>
-              <p><strong>1. Facebook Developer Consoleでアプリを作成</strong></p>
-              <p><strong>2. 広告管理システムのアクセストークンを取得</strong></p>
-              <p><strong>3. 下記「+ Metaアカウントを追加」ボタンでアカウント情報を登録</strong></p>
+              <p><strong>1. {t('step1CreateApp')}</strong></p>
+              <p><strong>2. {t('step2GetToken')}</strong></p>
+              <p><strong>3. {t('step3RegisterAccount')}</strong></p>
               <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                <strong>注意:</strong> 実際のMeta APIに接続するには有効なアクセストークンが必要です。
+                <strong>{t('noteValidTokenRequired')}</strong>
               </p>
             </div>
           }
