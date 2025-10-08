@@ -132,8 +132,7 @@ const Dashboard: React.FC = () => {
             <Statistic
               title={t('totalBudget')}
               value={Math.round(summary.total_budget)}
-              prefix={<DollarOutlined />}
-              suffix={t('yen')}
+              prefix="¥"
             />
           </Card>
         </Col>
@@ -142,8 +141,7 @@ const Dashboard: React.FC = () => {
             <Statistic
               title={t('totalSpend')}
               value={Math.round(summary.total_spend)}
-              prefix={<DollarOutlined />}
-              suffix={t('yen')}
+              prefix="¥"
             />
           </Card>
         </Col>

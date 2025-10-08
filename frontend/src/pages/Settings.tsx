@@ -25,6 +25,8 @@ const Settings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<MetaAccount | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [initialSettings, setInitialSettings] = useState<SettingsData | null>(null);
   
   // Token Exchange Modal
   const [tokenExchangeModalVisible, setTokenExchangeModalVisible] = useState(false);
@@ -39,7 +41,7 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     // Load initial settings
-    const initialSettings: SettingsData = {
+    const settings: SettingsData = {
       company_name: 'My Ads Platform',
       email: 'admin@example.com',
       phone: '+81-90-1234-5678',
@@ -48,7 +50,8 @@ const Settings: React.FC = () => {
       notifications: true,
     };
     
-    form.setFieldsValue(initialSettings);
+    setInitialSettings(settings);
+    form.setFieldsValue(settings);
     loadMetaAccounts();
   }, [form, i18n.language]);
 
@@ -69,11 +72,26 @@ const Settings: React.FC = () => {
       
       console.log('Settings saved:', values);
       // In a real app, save to backend
+      
+      // Update initial settings and exit edit mode
+      setInitialSettings(values);
+      setIsEditing(false);
     } catch (error) {
       console.error('Failed to save settings:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    if (initialSettings) {
+      form.setFieldsValue(initialSettings);
+    }
+    setIsEditing(false);
   };
 
   const handleMetaAccountSubmit = async (values: any) => {
@@ -107,7 +125,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleEdit = (account: MetaAccount) => {
+  const handleEditMetaAccount = (account: MetaAccount) => {
     setEditingAccount(account);
     setIsModalVisible(true);
   };
@@ -238,7 +256,7 @@ const Settings: React.FC = () => {
           <Button
             type="link"
             icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+            onClick={() => handleEditMetaAccount(record)}
           >
             {t('edit')}
           </Button>
@@ -270,7 +288,12 @@ const Settings: React.FC = () => {
             label={t('companyName')}
             rules={[{ required: true, message: t('enterCompanyName') }]}
           >
-            <Input placeholder={t('enterCompanyName')} />
+            <Input 
+              placeholder={t('enterCompanyName')} 
+              readOnly={!isEditing}
+              className={!isEditing ? 'readonly-input' : ''}
+              style={{ cursor: isEditing ? 'text' : 'default' }}
+            />
           </Form.Item>
 
           <Form.Item
@@ -278,7 +301,12 @@ const Settings: React.FC = () => {
             label={t('emailAddress')}
             rules={[{ required: true, message: t('enterEmailAddress') }]}
           >
-            <Input placeholder={t('enterEmailAddress')} />
+            <Input 
+              placeholder={t('enterEmailAddress')} 
+              readOnly={!isEditing}
+              className={!isEditing ? 'readonly-input' : ''}
+              style={{ cursor: isEditing ? 'text' : 'default' }}
+            />
           </Form.Item>
 
           <Form.Item
@@ -286,7 +314,12 @@ const Settings: React.FC = () => {
             label={t('phoneNumber')}
             rules={[{ required: true, message: t('enterPhoneNumber') }]}
           >
-            <Input placeholder={t('enterPhoneNumber')} />
+            <Input 
+              placeholder={t('enterPhoneNumber')} 
+              readOnly={!isEditing}
+              className={!isEditing ? 'readonly-input' : ''}
+              style={{ cursor: isEditing ? 'text' : 'default' }}
+            />
           </Form.Item>
 
           <Form.Item
@@ -294,7 +327,12 @@ const Settings: React.FC = () => {
             label={t('language')}
             rules={[{ required: true, message: t('languageRequired') }]}
           >
-            <Select onChange={(value) => i18n.changeLanguage(value)}>
+            <Select 
+              onChange={(value) => i18n.changeLanguage(value)}
+              open={isEditing ? undefined : false}
+              className={!isEditing ? 'readonly-select' : ''}
+              style={{ cursor: isEditing ? 'pointer' : 'default' }}
+            >
               <Option value="ja">{t('japanese')}</Option>
               <Option value="en">{t('english')}</Option>
               <Option value="zh">{t('chinese')}</Option>
@@ -306,7 +344,11 @@ const Settings: React.FC = () => {
             name="timezone"
             label={t('timezone')}
           >
-            <Select>
+            <Select
+              open={isEditing ? undefined : false}
+              className={!isEditing ? 'readonly-select' : ''}
+              style={{ cursor: isEditing ? 'pointer' : 'default' }}
+            >
               <Option value="Asia/Tokyo">Asia/Tokyo</Option>
               <Option value="UTC">UTC</Option>
               <Option value="America/New_York">America/New_York</Option>
@@ -320,13 +362,30 @@ const Settings: React.FC = () => {
             label={t('notificationSettings')}
             valuePropName="checked"
           >
-            <Switch />
+            <Switch 
+              disabled={!isEditing}
+              style={{
+                opacity: 1,
+                cursor: isEditing ? 'pointer' : 'not-allowed'
+              }}
+            />
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
-              <span className="button-text">{t('saveSettings')}</span>
-            </Button>
+            {!isEditing ? (
+              <Button type="primary" onClick={handleEdit} icon={<EditOutlined />}>
+                <span className="button-text">{t('edit')}</span>
+              </Button>
+            ) : (
+              <Space>
+                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>
+                  <span className="button-text">{t('saveSettings')}</span>
+                </Button>
+                <Button onClick={handleCancel} disabled={loading}>
+                  <span className="button-text">{t('cancel')}</span>
+                </Button>
+              </Space>
+            )}
           </Form.Item>
         </Form>
       </Card>
@@ -635,4 +694,3 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
-

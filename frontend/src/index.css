@@ -281,3 +281,43 @@ code {
     image-rendering: crisp-edges;
   }
 }
+
+/* Readonly input and select styles - hide border when not editing */
+.readonly-input.ant-input,
+.readonly-input.ant-input:hover,
+.readonly-input.ant-input:focus,
+.readonly-input.ant-input:active,
+.readonly-input.ant-input-focused {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+  outline: none !important;
+}
+
+.readonly-select .ant-select-selector,
+.readonly-select .ant-select-selector:hover,
+.readonly-select.ant-select-focused .ant-select-selector,
+.readonly-select .ant-select-selector:focus,
+.readonly-select .ant-select-selector:active,
+.readonly-select:hover .ant-select-selector,
+.readonly-select.ant-select-open .ant-select-selector {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+  outline: none !important;
+}
+
+.readonly-select .ant-select-arrow {
+  opacity: 0 !important;
+}
+
+/* Prevent any border or background changes on readonly fields */
+.ant-form-item .readonly-input.ant-input {
+  border: 1px solid transparent !important;
+  background: transparent !important;
+}
+
+.ant-form-item .readonly-select .ant-select-selector {
+  border: 1px solid transparent !important;
+  background: transparent !important;
+}
