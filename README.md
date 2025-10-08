@@ -142,4 +142,4 @@ Proprietary
 
 ## 作者
 
-Your Name
+Junki Hayashi
