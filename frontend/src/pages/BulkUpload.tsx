@@ -592,9 +592,14 @@ const BulkUpload: React.FC = () => {
                     placeholder={t('selectAccount')}
                     style={{ width: '100%' }}
                     size="large"
+                    optionLabelProp="label"
                   >
                     {metaAccounts.map(account => (
-                      <Select.Option key={account.id} value={account.id}>
+                      <Select.Option 
+                        key={account.id} 
+                        value={account.id}
+                        label={account.account_name}
+                      >
                         <div>
                           <div style={{ fontWeight: 'bold' }}>{account.account_name}</div>
                           <div style={{ fontSize: '12px', color: '#666' }}>
