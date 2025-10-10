@@ -4,12 +4,25 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 
 ## 機能
 
+### 認証・セキュリティ
 - ✅ ユーザー認証（JWT）
+- ✅ 二要素認証（2FA/TOTP）
+- ✅ Rate Limiting（DoS攻撃対策）
+- ✅ パスワード変更機能
+
+### 多言語・国際化
 - ✅ 多言語対応（日本語、英語、中国語、韓国語）
-- 🚧 広告キャンペーン管理
-- 🚧 一括入稿
+
+### 広告管理
+- ✅ 広告キャンペーン管理（CRUD）
+- ✅ アドセット管理
+- ✅ 一括入稿機能
+- ✅ Meta API連携
+
+### その他
+- ✅ アラート機能
 - 🚧 レポート機能
-- 🚧 Meta API連携
+- 🚧 課金システム（Stripe連携）
 
 ## 技術スタック
 
@@ -18,22 +31,41 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - Django REST Framework
 - PostgreSQL / SQLite
 - Celery + Redis
-- JWT認証
+- JWT認証（Simple JWT）
+- 二要素認証（pyotp + qrcode）
+- Rate Limiting（django-ratelimit）
+- テスト（pytest + pytest-django）
+- Stripe決済（予定）
 
 ### Frontend
 - React 18
 - TypeScript
 - Ant Design
-- i18next
+- i18next（多言語対応）
+
+### DevOps & Testing
+- pytest（テストカバレッジ80%目標）
+- pytest-django
+- factory-boy（テストフィクスチャ）
+- Docker & Docker Compose
+- Git（バージョン管理）
 
 ## セットアップ
 
 ### 環境変数
 
 ```bash
-cp .env.example .env
+cp env.example .env
 # .envファイルを編集して必要な設定を追加
 ```
+
+**重要な環境変数**:
+- `SECRET_KEY`: Django シークレットキー
+- `JWT_SECRET_KEY`: JWT トークン用シークレットキー
+- `META_APP_ID`, `META_APP_SECRET`: Meta API認証情報
+- `STRIPE_SECRET_KEY`: Stripe決済キー（本番環境）
+- `REDIS_URL`: Redis接続URL
+- `SENTRY_DSN`: エラー監視（オプション）
 
 ### Backend
 
@@ -84,6 +116,13 @@ npm start
 - `PUT /api/accounts/users/update_profile/` - プロフィール更新
 - `POST /api/accounts/users/change_password/` - パスワード変更
 
+### 二要素認証
+- `POST /api/accounts/users/enable_2fa/` - 2FA有効化
+- `POST /api/accounts/users/verify_2fa/` - トークン検証
+- `POST /api/accounts/users/verify_backup_code/` - バックアップコード検証
+- `POST /api/accounts/users/disable_2fa/` - 2FA無効化
+- `GET /api/accounts/users/get_2fa_status/` - 2FA状態確認
+
 ### 開発環境の認証情報
 
 ```
@@ -108,10 +147,19 @@ prettier --write frontend/src/
 ### テスト
 
 ```bash
-# Backend
-python manage.py test
+# Backend（pytest）
+cd backend
+source venv/bin/activate
+pytest
+
+# テストカバレッジ付き
+pytest --cov=apps --cov-report=html
+
+# 特定のテストファイルのみ実行
+pytest tests/test_accounts.py
 
 # Frontend
+cd frontend
 npm test
 ```
 
@@ -128,13 +176,17 @@ npm test
 
 ### セキュリティチェックリスト
 
-- [ ] SECRET_KEYを変更
+- [ ] SECRET_KEYとJWT_SECRET_KEYを変更
 - [ ] DEBUG=Falseに設定
 - [ ] ALLOWED_HOSTSを設定
 - [ ] HTTPS/SSL設定
 - [ ] CORS設定の確認
 - [ ] データベース認証情報の保護
 - [ ] Sentryの設定（エラー監視）
+- [x] Rate Limiting実装済み
+- [x] 二要素認証実装済み
+- [ ] Stripe Webhookシークレット設定
+- [ ] バックアップ戦略の確立
 
 ## ポートフォリオ
 
@@ -144,15 +196,33 @@ npm test
 - フルスタック開発（Django + React）
 - RESTful API設計
 - JWT認証システム
+- **二要素認証（2FA/TOTP）** 🔐
+- **Rate Limiting（DoS攻撃対策）** 🛡️
+- **包括的テストカバレッジ（pytest）** ✅
 - 多言語対応（i18next）
 - レスポンシブデザイン
 - バックエンド非同期処理（Celery）
 - ファイルアップロード・バリデーション
+- Meta API連携
+
+**セキュリティ機能：**
+- IPベースのRate Limiting
+- TOTP方式の二要素認証
+- バックアップコード生成
+- JWTトークンブラックリスト
+- パスワードハッシュ化（Django標準）
+
+**テスト：**
+- 30+のテストケース実装
+- 認証フロー完全カバレッジ
+- pytest + pytest-django
+- テストカバレッジ80%目標
 
 **注意事項：**
-- このリポジトリは学習・ポートフォリオ目的です
+- このリポジトリは商用化を目指した開発プロジェクトです
 - 実際のMeta APIキーは含まれていません
 - 本番環境での使用には適切なセキュリティ設定が必要です
+- 現在開発中の機能: Stripe決済連携、サブスクリプション管理
 
 ## ライセンス
 
