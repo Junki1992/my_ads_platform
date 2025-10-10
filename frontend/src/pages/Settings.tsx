@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Popconfirm, Modal, Alert, Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
+import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
 import { EditOutlined, DeleteOutlined, SaveOutlined, SwapOutlined, PlusOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
@@ -40,18 +41,40 @@ const Settings: React.FC = () => {
   const [tokenInfo, setTokenInfo] = useState<any>(null);
 
   useEffect(() => {
-    // Load initial settings
-    const settings: SettingsData = {
-      company_name: 'My Ads Platform',
-      email: 'admin@example.com',
-      phone: '+81-90-1234-5678',
-      language: i18n.language,
-      timezone: 'Asia/Tokyo',
-      notifications: true,
+    const loadUserSettings = async () => {
+      try {
+        // バックエンドから現在のユーザー情報を取得
+        const response = await api.get('/accounts/users/me/');
+        const user = response.data;
+        
+        const settings: SettingsData = {
+          company_name: user.company || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          language: user.language || i18n.language,
+          timezone: user.timezone || 'Asia/Tokyo',
+          notifications: true,
+        };
+        
+        setInitialSettings(settings);
+        form.setFieldsValue(settings);
+      } catch (error) {
+        console.error('Failed to load user settings:', error);
+        // エラー時はデフォルト値を使用
+        const settings: SettingsData = {
+          company_name: '',
+          email: '',
+          phone: '',
+          language: i18n.language,
+          timezone: 'Asia/Tokyo',
+          notifications: true,
+        };
+        setInitialSettings(settings);
+        form.setFieldsValue(settings);
+      }
     };
     
-    setInitialSettings(settings);
-    form.setFieldsValue(settings);
+    loadUserSettings();
     loadMetaAccounts();
   }, [form, i18n.language]);
 
@@ -67,13 +90,20 @@ const Settings: React.FC = () => {
   const handleSubmit = async (values: SettingsData) => {
     setLoading(true);
     try {
-      // Update language
+      // バックエンドに設定を保存
+      await api.put('/accounts/users/update_profile/', {
+        company: values.company_name,
+        phone: values.phone,
+        language: values.language,
+        timezone: values.timezone,
+      });
+      
+      // 言語を更新
       await i18n.changeLanguage(values.language);
       
-      console.log('Settings saved:', values);
-      // In a real app, save to backend
+      console.log('Settings saved successfully');
       
-      // Update initial settings and exit edit mode
+      // 初期設定を更新して編集モードを終了
       setInitialSettings(values);
       setIsEditing(false);
     } catch (error) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, Tabs, message } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +42,7 @@ const Login: React.FC = () => {
         first_name: values.first_name,
         last_name: values.last_name,
         company: values.company,
+        phone: values.phone,
       });
       navigate('/');
     } catch (error) {
@@ -125,6 +126,15 @@ const Login: React.FC = () => {
         name="company"
       >
         <Input placeholder="会社名" />
+      </Form.Item>
+
+      <Form.Item
+        name="phone"
+      >
+        <Input
+          prefix={<PhoneOutlined />}
+          placeholder="電話番号"
+        />
       </Form.Item>
 
       <Form.Item
