@@ -11,6 +11,11 @@ class User(AbstractUser):
     timezone = models.CharField(_('timezone'), max_length=50, default='Asia/Tokyo')
     is_demo_user = models.BooleanField(_('demo user'), default=False)
     
+    # 二要素認証関連フィールド
+    two_factor_enabled = models.BooleanField(_('2FA enabled'), default=False)
+    two_factor_secret = models.CharField(_('2FA secret'), max_length=32, blank=True)
+    backup_codes = models.TextField(_('backup codes'), blank=True)  # JSON形式で保存
+    
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
     

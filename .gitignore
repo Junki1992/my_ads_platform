@@ -1,46 +1,39 @@
+# ==============================================
+# セキュリティファイル - 絶対にGitにコミットしないこと
+# ==============================================
+
+# 環境変数ファイル
+.env
+.env.local
+.env.production
+.env.*.local
+
+# データベース
+*.sqlite3
+*.db
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual Environment
 venv/
 env/
 ENV/
-env.bak/
-venv.bak/
+.venv
 
 # Django
 *.log
-local_settings.py
 db.sqlite3
 db.sqlite3-journal
 /media
 /staticfiles
 /static
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Celery
+celerybeat-schedule
+celerybeat.pid
 
 # IDEs
 .vscode/
@@ -50,32 +43,44 @@ db.sqlite3-journal
 *~
 .DS_Store
 
-# Node
+# Frontend
 node_modules/
+/frontend/build
+/frontend/.env
+/frontend/.env.local
+/frontend/.env.production.local
+/frontend/.env.test.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnp/
-.pnp.js
 
 # Testing
 .coverage
 .pytest_cache/
 htmlcov/
 .tox/
-.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
-# Frontend build
-frontend/build/
-frontend/dist/
+# Backup files
+*.bak
+*.backup
+*.tmp
 
-# Docker
-*.pid
-*.seed
-*.pid.lock
-
-# Misc
-.env.production
-secrets/
+# SSL certificates
 *.pem
 *.key
+*.crt
+
+# Secrets
+secrets.yml
+secrets.json
+credentials.json
+service-account-key.json
+
+# Docker
+.dockerignore
+
+# OS
+Thumbs.db

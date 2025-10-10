@@ -15,6 +15,13 @@ from .serializers import (
     ChangePasswordSerializer,
     MetaAccountSerializer
 )
+from .two_factor import TwoFactorAuthService
+from .two_factor_serializers import (
+    TwoFactorEnableSerializer,
+    TwoFactorVerifySerializer,
+    TwoFactorDisableSerializer,
+    BackupCodeVerifySerializer
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +169,141 @@ class UserViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def enable_2fa(self, request):
+        """二要素認証を有効化"""
+        user = request.user
+        serializer = TwoFactorEnableSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # パスワード確認
+            if not user.check_password(serializer.validated_data['password']):
+                return Response({
+                    'error': 'Invalid password'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # すでに有効化されている場合
+            if user.two_factor_enabled:
+                return Response({
+                    'error': '2FA is already enabled'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 2FAを有効化
+            result = TwoFactorAuthService.enable_2fa(user)
+            
+            logger.info(f"2FA enabled for user: {user.email}")
+            
+            return Response({
+                'message': '2FA enabled successfully',
+                'qr_code': result['qr_code'],
+                'backup_codes': result['backup_codes']
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def verify_2fa(self, request):
+        """二要素認証トークンを検証"""
+        user = request.user
+        serializer = TwoFactorVerifySerializer(data=request.data)
+        
+        if serializer.is_valid():
+            if not user.two_factor_enabled:
+                return Response({
+                    'error': '2FA is not enabled'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            token = serializer.validated_data['token']
+            
+            # トークンを検証
+            if TwoFactorAuthService.verify_token(user.two_factor_secret, token):
+                return Response({
+                    'message': 'Token verified successfully',
+                    'valid': True
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'Invalid token',
+                    'valid': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def verify_backup_code(self, request):
+        """バックアップコードを検証"""
+        user = request.user
+        serializer = BackupCodeVerifySerializer(data=request.data)
+        
+        if serializer.is_valid():
+            if not user.two_factor_enabled:
+                return Response({
+                    'error': '2FA is not enabled'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            backup_code = serializer.validated_data['backup_code']
+            
+            # バックアップコードを検証
+            if TwoFactorAuthService.verify_backup_code(user, backup_code):
+                logger.info(f"Backup code used by user: {user.email}")
+                return Response({
+                    'message': 'Backup code verified successfully',
+                    'valid': True
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'Invalid backup code',
+                    'valid': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def disable_2fa(self, request):
+        """二要素認証を無効化"""
+        user = request.user
+        serializer = TwoFactorDisableSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # パスワード確認
+            if not user.check_password(serializer.validated_data['password']):
+                return Response({
+                    'error': 'Invalid password'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 2FAが有効でない場合
+            if not user.two_factor_enabled:
+                return Response({
+                    'error': '2FA is not enabled'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # トークン確認
+            token = serializer.validated_data['token']
+            if not TwoFactorAuthService.verify_token(user.two_factor_secret, token):
+                return Response({
+                    'error': 'Invalid token'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 2FAを無効化
+            TwoFactorAuthService.disable_2fa(user)
+            
+            logger.info(f"2FA disabled for user: {user.email}")
+            
+            return Response({
+                'message': '2FA disabled successfully'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def get_2fa_status(self, request):
+        """二要素認証の状態を取得"""
+        user = request.user
+        return Response({
+            'enabled': user.two_factor_enabled,
+            'has_backup_codes': bool(user.backup_codes)
+        }, status=status.HTTP_200_OK)
 
 
 class MetaAccountViewSet(viewsets.ModelViewSet):
