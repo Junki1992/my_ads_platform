@@ -706,17 +706,43 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
                 # クリエイティブ情報を抽出
                 creative_data = ad_data.get('creative', {})
-                object_story_spec = creative_data.get('object_story_spec', {})
-                link_data = object_story_spec.get('link_data', {})
+                creative_id = creative_data.get('id')
                 
                 logger.info(f"Creative data for ad {ad_id}: {creative_data}")
-                logger.info(f"Link data: {link_data}")
                 
-                headline = link_data.get('name', '')
-                description = link_data.get('message', '')
-                cta_type = link_data.get('call_to_action_type', 'LEARN_MORE')
+                headline = ''
+                description = ''
+                cta_type = 'LEARN_MORE'
                 
-                logger.info(f"Extracted - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
+                # クリエイティブIDから詳細情報を取得
+                if creative_id:
+                    try:
+                        creative_url = f"https://graph.facebook.com/v22.0/{creative_id}"
+                        creative_params = {
+                            'access_token': meta_account.access_token,
+                            'fields': 'object_story_spec'
+                        }
+                        
+                        creative_response = requests.get(creative_url, params=creative_params, timeout=30)
+                        
+                        if creative_response.status_code == 200:
+                            creative_details = creative_response.json()
+                            logger.info(f"Creative details: {creative_details}")
+                            
+                            object_story_spec = creative_details.get('object_story_spec', {})
+                            link_data = object_story_spec.get('link_data', {})
+                            
+                            headline = link_data.get('name', '')
+                            description = link_data.get('message', '')
+                            cta_type = link_data.get('call_to_action_type', 'LEARN_MORE')
+                            
+                            logger.info(f"Extracted from creative details - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
+                        else:
+                            logger.error(f"Failed to fetch creative details: {creative_response.text}")
+                    except Exception as e:
+                        logger.error(f"Error fetching creative details: {str(e)}")
+                
+                logger.info(f"Final extracted - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
                 
                 # 広告を作成または更新
                 if existing_ad:
