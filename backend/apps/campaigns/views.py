@@ -704,6 +704,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 else:
                     logger.info(f"Creating new ad: {ad_id}")
                 
+                # 重複チェック：同じ名前の広告が複数存在する場合は古いものを削除
+                duplicate_ads = Ad.objects.filter(name=ad_data.get('name', ''), adset__campaign=campaign).exclude(ad_id=ad_id)
+                if duplicate_ads.exists():
+                    logger.info(f"Found {duplicate_ads.count()} duplicate ads, removing them")
+                    duplicate_ads.delete()
+                
                 # クリエイティブ情報を抽出
                 creative_data = ad_data.get('creative', {})
                 creative_id = creative_data.get('id')
