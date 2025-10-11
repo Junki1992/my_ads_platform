@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import Login from './Login';
 import { AuthProvider } from '../contexts/AuthContext';
-import * as authService from '../services/authService';
+import authService from '../services/authService';
 
 // サービスのモック
 jest.mock('../services/authService');
@@ -57,6 +57,8 @@ describe('Login Page', () => {
         username: 'testuser',
         first_name: 'Test',
         last_name: 'User',
+        language: 'ja',
+        timezone: 'Asia/Tokyo',
       },
       tokens: {
         access: 'mock_access_token',
@@ -77,10 +79,10 @@ describe('Login Page', () => {
     fireEvent.click(loginButton);
     
     await waitFor(() => {
-      expect(mockedAuthService.login).toHaveBeenCalledWith(
-        'test@example.com',
-        'password123'
-      );
+      expect(mockedAuthService.login).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'password123',
+      });
     });
   });
 
