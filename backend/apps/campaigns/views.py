@@ -599,11 +599,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
             api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/adsets"
             params = {
                 'access_token': meta_account.access_token,
-                'filtering': [{'field': 'campaign.id', 'operator': 'EQUAL', 'value': campaign.campaign_id}],
                 'fields': 'id,name,status,campaign_id,daily_budget,lifetime_budget,bid_strategy,optimization_goal,created_time'
             }
             
+            logger.info(f"Fetching adsets for campaign {campaign.campaign_id}")
+            logger.info(f"API URL: {api_url}")
+            logger.info(f"Params: {params}")
+            
             response = requests.get(api_url, params=params, timeout=30)
+            
+            logger.info(f"Adsets API response status: {response.status_code}")
+            logger.info(f"Adsets API response text: {response.text}")
             
             if response.status_code != 200:
                 logger.error(f"Failed to fetch adsets: {response.text}")
@@ -612,11 +618,22 @@ class CampaignViewSet(viewsets.ModelViewSet):
             data = response.json()
             adsets_data = data.get('data', [])
             
-            for adset_data in adsets_data:
+            # キャンペーンIDでフィルタリング（API側でフィルタリングできない場合）
+            filtered_adsets = [
+                adset for adset in adsets_data 
+                if adset.get('campaign_id') == campaign.campaign_id
+            ]
+            
+            logger.info(f"Found {len(adsets_data)} total adsets, {len(filtered_adsets)} for campaign {campaign.campaign_id}")
+            
+            for adset_data in filtered_adsets:
                 adset_id = adset_data.get('id')
+                
+                logger.info(f"Processing adset: {adset_id} - {adset_data.get('name')}")
                 
                 # 既に存在する広告セットはスキップ
                 if AdSet.objects.filter(adset_id=adset_id).exists():
+                    logger.info(f"Adset {adset_id} already exists, skipping")
                     continue
                 
                 # 広告セットを作成
@@ -629,6 +646,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     optimization_goal=adset_data.get('optimization_goal', 'LINK_CLICKS'),
                     budget=adset_data.get('daily_budget') or adset_data.get('lifetime_budget') or '0',
                 )
+                
+                logger.info(f"Created adset: {adset.id} - {adset.name}")
                 
                 # 広告をインポート
                 self._import_ads_from_meta(adset, meta_account)
@@ -645,11 +664,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
             api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/ads"
             params = {
                 'access_token': meta_account.access_token,
-                'filtering': [{'field': 'adset.id', 'operator': 'EQUAL', 'value': adset.adset_id}],
                 'fields': 'id,name,status,adset_id,creative,created_time'
             }
             
+            logger.info(f"Fetching ads for adset {adset.adset_id}")
+            logger.info(f"Ads API URL: {api_url}")
+            logger.info(f"Ads API Params: {params}")
+            
             response = requests.get(api_url, params=params, timeout=30)
+            
+            logger.info(f"Ads API response status: {response.status_code}")
+            logger.info(f"Ads API response text: {response.text}")
             
             if response.status_code != 200:
                 logger.error(f"Failed to fetch ads: {response.text}")
@@ -658,15 +683,26 @@ class CampaignViewSet(viewsets.ModelViewSet):
             data = response.json()
             ads_data = data.get('data', [])
             
-            for ad_data in ads_data:
+            # 広告セットIDでフィルタリング（API側でフィルタリングできない場合）
+            filtered_ads = [
+                ad for ad in ads_data 
+                if ad.get('adset_id') == adset.adset_id
+            ]
+            
+            logger.info(f"Found {len(ads_data)} total ads, {len(filtered_ads)} for adset {adset.adset_id}")
+            
+            for ad_data in filtered_ads:
                 ad_id = ad_data.get('id')
+                
+                logger.info(f"Processing ad: {ad_id} - {ad_data.get('name')}")
                 
                 # 既に存在する広告はスキップ
                 if Ad.objects.filter(ad_id=ad_id).exists():
+                    logger.info(f"Ad {ad_id} already exists, skipping")
                     continue
                 
                 # 広告を作成
-                Ad.objects.create(
+                ad = Ad.objects.create(
                     adset=adset,
                     ad_id=ad_id,
                     name=ad_data.get('name', ''),
@@ -676,6 +712,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     description='',
                     cta_type='LEARN_MORE',
                 )
+                
+                logger.info(f"Created ad: {ad.id} - {ad.name}")
                 
         except Exception as e:
             logger.error(f"Failed to import ads: {str(e)}")
