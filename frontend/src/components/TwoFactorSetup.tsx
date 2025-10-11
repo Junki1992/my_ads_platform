@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Modal, Form, Input, Button, Alert, Typography, Space, Card, Divider, message } from 'antd';
-import { SafetyOutlined, CopyOutlined, QrcodeOutlined } from '@ant-design/icons';
+import { SafetyOutlined, CopyOutlined } from '@ant-design/icons';
 import twoFactorService from '../services/twoFactorService';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface TwoFactorSetupProps {
   visible: boolean;

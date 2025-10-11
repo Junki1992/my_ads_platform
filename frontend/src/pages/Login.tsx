@@ -4,7 +4,6 @@ import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import twoFactorService from '../services/twoFactorService';
 import api from '../services/api';
 
 const Login: React.FC = () => {
@@ -19,24 +18,22 @@ const Login: React.FC = () => {
   const handleLogin = async (values: any) => {
     setLoading(true);
     try {
-      // まず通常のログインを試行
       const credentials = {
         email: values.email,
         password: values.password,
       };
       
-      // ユーザーの2FAステータスを確認（ログイン前）
-      // 実際の実装では、バックエンドが2FA必要かどうかを返す必要がありますが、
-      // 簡易実装として、まずログインを試みる
       try {
         await login(credentials);
         navigate('/');
       } catch (error: any) {
-        // 2FA が必要な場合のエラーをチェック
-        if (error.response?.data?.requires_2fa) {
-          // 2FAが必要な場合、モーダルを表示
+        // ステータス202は2FAが必要
+        if (error.response?.status === 202 || error.response?.data?.requires_2fa) {
+          // 2FAが必要な場合、認証情報を保存してモーダルを表示
           setLoginCredentials(credentials);
           setTwoFactorModalVisible(true);
+          setLoading(false);
+          return;
         } else {
           throw error;
         }
@@ -53,20 +50,25 @@ const Login: React.FC = () => {
     
     setLoading(true);
     try {
-      // 2FAトークンを検証
-      const verifyResult = await twoFactorService.verify(values.token);
+      // 2FAトークン付きで再度ログイン
+      const response = await api.post('/accounts/auth/login/', {
+        ...loginCredentials,
+        two_factor_token: values.token,
+      });
       
-      if (verifyResult.valid) {
-        // トークンが有効な場合、ログインを完了
-        await login(loginCredentials);
-        message.success('ログインしました');
-        setTwoFactorModalVisible(false);
-        navigate('/');
-      } else {
-        message.error('認証コードが正しくありません');
-      }
+      // トークンを保存してログイン完了
+      const { user, tokens } = response.data;
+      localStorage.setItem('access_token', tokens.access);
+      localStorage.setItem('refresh_token', tokens.refresh);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      message.success('ログインしました');
+      setTwoFactorModalVisible(false);
+      
+      // ページをリロードして認証状態を反映
+      window.location.href = '/';
     } catch (error: any) {
-      message.error(error.response?.data?.error || '認証に失敗しました');
+      message.error(error.response?.data?.error || '認証コードが正しくありません');
     } finally {
       setLoading(false);
     }
@@ -77,20 +79,25 @@ const Login: React.FC = () => {
     
     setLoading(true);
     try {
-      // バックアップコードを検証
-      const verifyResult = await twoFactorService.verifyBackupCode(values.backup_code);
+      // バックアップコード付きで直接ログイン
+      const response = await api.post('/accounts/auth/login/', {
+        ...loginCredentials,
+        backup_code: values.backup_code,
+      });
       
-      if (verifyResult.valid) {
-        // バックアップコードが有効な場合、ログインを完了
-        await login(loginCredentials);
-        message.success('ログインしました');
-        setTwoFactorModalVisible(false);
-        navigate('/');
-      } else {
-        message.error('バックアップコードが正しくありません');
-      }
+      // トークンを保存してログイン完了
+      const { user, tokens } = response.data;
+      localStorage.setItem('access_token', tokens.access);
+      localStorage.setItem('refresh_token', tokens.refresh);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      message.success('バックアップコードでログインしました');
+      setTwoFactorModalVisible(false);
+      
+      // ページをリロードして認証状態を反映
+      window.location.href = '/';
     } catch (error: any) {
-      message.error(error.response?.data?.error || '認証に失敗しました');
+      message.error(error.response?.data?.error || 'バックアップコードが正しくありません');
     } finally {
       setLoading(false);
     }

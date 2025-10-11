@@ -69,14 +69,62 @@ class AuthViewSet(viewsets.GenericViewSet):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             password = serializer.validated_data['password']
+            two_factor_token = request.data.get('two_factor_token')  # 2FAトークン（オプション）
+            backup_code = request.data.get('backup_code')  # バックアップコード（オプション）
             
             # ユーザー認証
             user = authenticate(request, username=email, password=password)
             
             if user is not None:
-                # JWTトークンの生成
-                refresh = RefreshToken.for_user(user)
+                # 2FAが有効かチェック
+                if user.two_factor_enabled:
+                    # バックアップコードが提供されている場合
+                    if backup_code:
+                        if TwoFactorAuthService.verify_backup_code(user, backup_code):
+                            # バックアップコード検証成功 - トークンを発行
+                            refresh = RefreshToken.for_user(user)
+                            logger.info(f"User logged in with backup code: {user.email}")
+                            
+                            return Response({
+                                'user': UserSerializer(user).data,
+                                'tokens': {
+                                    'refresh': str(refresh),
+                                    'access': str(refresh.access_token),
+                                }
+                            }, status=status.HTTP_200_OK)
+                        else:
+                            return Response({
+                                'error': 'Invalid backup code'
+                            }, status=status.HTTP_401_UNAUTHORIZED)
+                    
+                    # 2FAトークンが提供されている場合、検証
+                    elif two_factor_token:
+                        # トークンを検証
+                        if TwoFactorAuthService.verify_token(user.two_factor_secret, two_factor_token):
+                            # 検証成功 - トークンを発行
+                            refresh = RefreshToken.for_user(user)
+                            logger.info(f"User logged in with 2FA: {user.email}")
+                            
+                            return Response({
+                                'user': UserSerializer(user).data,
+                                'tokens': {
+                                    'refresh': str(refresh),
+                                    'access': str(refresh.access_token),
+                                }
+                            }, status=status.HTTP_200_OK)
+                        else:
+                            return Response({
+                                'error': 'Invalid 2FA token'
+                            }, status=status.HTTP_401_UNAUTHORIZED)
+                    else:
+                        # 2FAトークンが提供されていない - 2FAが必要であることを通知
+                        return Response({
+                            'requires_2fa': True,
+                            'message': '2段階認証が必要です'
+                        }, status=status.HTTP_202_ACCEPTED)
                 
+                # 2FAが無効 - 通常のログイン
+                refresh = RefreshToken.for_user(user)
                 logger.info(f"User logged in: {user.email}")
                 
                 return Response({
