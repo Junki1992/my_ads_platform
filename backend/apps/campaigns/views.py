@@ -557,7 +557,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 start_date = datetime.now().date()
                 end_date = start_date + timedelta(days=30)
                 
-                Campaign.objects.create(
+                campaign = Campaign.objects.create(
                     user=request.user,
                     meta_account=meta_account,
                     campaign_id=campaign_id,
@@ -568,6 +568,10 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     start_date=start_date,
                     end_date=end_date,
                 )
+                
+                # 広告セットをインポート
+                self._import_adsets_from_meta(campaign, meta_account)
+                
                 imported_count += 1
             
             logger.info(f"Imported {imported_count} campaigns, skipped {skipped_count}")
@@ -585,6 +589,96 @@ class CampaignViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Meta APIからのインポートに失敗しました: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _import_adsets_from_meta(self, campaign, meta_account):
+        """Meta API から広告セットと広告をインポート"""
+        import requests
+        
+        try:
+            # 広告セットを取得
+            api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/adsets"
+            params = {
+                'access_token': meta_account.access_token,
+                'filtering': [{'field': 'campaign.id', 'operator': 'EQUAL', 'value': campaign.campaign_id}],
+                'fields': 'id,name,status,campaign_id,daily_budget,lifetime_budget,bid_strategy,optimization_goal,created_time'
+            }
+            
+            response = requests.get(api_url, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch adsets: {response.text}")
+                return
+            
+            data = response.json()
+            adsets_data = data.get('data', [])
+            
+            for adset_data in adsets_data:
+                adset_id = adset_data.get('id')
+                
+                # 既に存在する広告セットはスキップ
+                if AdSet.objects.filter(adset_id=adset_id).exists():
+                    continue
+                
+                # 広告セットを作成
+                adset = AdSet.objects.create(
+                    campaign=campaign,
+                    adset_id=adset_id,
+                    name=adset_data.get('name', ''),
+                    status=adset_data.get('status', 'PAUSED'),
+                    bid_strategy=adset_data.get('bid_strategy', 'LOWEST_COST_WITHOUT_CAP'),
+                    optimization_goal=adset_data.get('optimization_goal', 'LINK_CLICKS'),
+                    budget=adset_data.get('daily_budget') or adset_data.get('lifetime_budget') or '0',
+                )
+                
+                # 広告をインポート
+                self._import_ads_from_meta(adset, meta_account)
+                
+        except Exception as e:
+            logger.error(f"Failed to import adsets: {str(e)}")
+
+    def _import_ads_from_meta(self, adset, meta_account):
+        """Meta API から広告をインポート"""
+        import requests
+        
+        try:
+            # 広告を取得
+            api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/ads"
+            params = {
+                'access_token': meta_account.access_token,
+                'filtering': [{'field': 'adset.id', 'operator': 'EQUAL', 'value': adset.adset_id}],
+                'fields': 'id,name,status,adset_id,creative,created_time'
+            }
+            
+            response = requests.get(api_url, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch ads: {response.text}")
+                return
+            
+            data = response.json()
+            ads_data = data.get('data', [])
+            
+            for ad_data in ads_data:
+                ad_id = ad_data.get('id')
+                
+                # 既に存在する広告はスキップ
+                if Ad.objects.filter(ad_id=ad_id).exists():
+                    continue
+                
+                # 広告を作成
+                Ad.objects.create(
+                    adset=adset,
+                    ad_id=ad_id,
+                    name=ad_data.get('name', ''),
+                    status=ad_data.get('status', 'PAUSED'),
+                    creative_type='LINK',
+                    headline='',
+                    description='',
+                    cta_type='LEARN_MORE',
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to import ads: {str(e)}")
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
