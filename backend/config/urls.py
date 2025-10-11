@@ -15,9 +15,14 @@ urlpatterns = [
     path('api/integrations/', include('apps.integrations.urls')),
     path('api/i18n/', include('apps.i18n.urls')),
     path('api/demo/', include('apps.demo.urls')),
-    path('api/billing/', include('apps.billing.urls')),
     path('', include('apps.demo.urls')),  # ルートURLを追加
 ]
+
+# 課金機能（環境変数で制御）
+if settings.ENABLE_BILLING:
+    urlpatterns.append(
+        path('api/billing/', include('apps.billing.urls'))
+    )
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -22,7 +22,7 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 ### その他
 - ✅ アラート機能
 - 🚧 レポート機能
-- 🚧 課金システム（Stripe連携）
+- ✅ 課金システム（Stripe連携）- フィーチャーフラグで制御可能
 
 ## 技術スタック
 
@@ -66,6 +66,7 @@ cp env.example .env
 - `STRIPE_SECRET_KEY`: Stripe決済キー（本番環境）
 - `REDIS_URL`: Redis接続URL
 - `SENTRY_DSN`: エラー監視（オプション）
+- `ENABLE_BILLING`: 課金機能の有効/無効（デフォルト: False）
 
 ### Backend
 
@@ -163,6 +164,28 @@ cd frontend
 npm test
 ```
 
+## フィーチャーフラグ
+
+### 課金機能の制御
+
+本番環境で課金機能を無効化する場合：
+
+**バックエンド (.env)**:
+```bash
+ENABLE_BILLING=False
+```
+
+**フロントエンド (.env)**:
+```bash
+REACT_APP_ENABLE_BILLING=false
+```
+
+課金機能をリリースする準備ができたら、`True`に変更してサーバーを再起動してください。
+
+詳細は [docs/feature_flags.md](docs/feature_flags.md) を参照。
+
+---
+
 ## デプロイ
 
 ### 本番環境設定
@@ -172,7 +195,8 @@ npm test
 3. `SECRET_KEY`と`JWT_SECRET_KEY`を変更
 4. PostgreSQLデータベースを設定
 5. Redisを設定
-6. 静的ファイルを収集: `python manage.py collectstatic`
+6. **`ENABLE_BILLING=False`を設定（課金機能を無効化）**
+7. 静的ファイルを収集: `python manage.py collectstatic`
 
 ### セキュリティチェックリスト
 

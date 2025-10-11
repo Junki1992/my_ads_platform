@@ -60,6 +60,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'apps.accounts.middleware.RateLimitMiddleware',  # Rate Limiting
+    'apps.billing.middleware.BillingFeatureMiddleware',  # Billing Feature Control
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -182,6 +183,9 @@ FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 # Slack設定
 SLACK_BOT_TOKEN = config('SLACK_BOT_TOKEN', default='')
 SLACK_WEBHOOK_URL = config('SLACK_WEBHOOK_URL', default='')
+
+# フィーチャーフラグ
+ENABLE_BILLING = config('ENABLE_BILLING', default=False, cast=bool)
 
 # デモモード設定
 DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
