@@ -25,6 +25,7 @@
       "start": "react-scripts start",
       "build": "react-scripts build",
       "test": "react-scripts test",
+      "test:coverage": "react-scripts test --coverage --watchAll=false",
       "eject": "react-scripts eject"
     },
     "eslintConfig": {
@@ -46,6 +47,29 @@
       ]
     },
     "devDependencies": {
+      "@testing-library/react": "^14.0.0",
+      "@testing-library/jest-dom": "^6.1.5",
+      "@testing-library/user-event": "^14.5.1",
       "@types/jest": "^29.0.0"
+    },
+    "jest": {
+      "coveragePathIgnorePatterns": [
+        "/node_modules/",
+        "/build/"
+      ],
+      "collectCoverageFrom": [
+        "src/**/*.{ts,tsx}",
+        "!src/**/*.d.ts",
+        "!src/index.tsx",
+        "!src/reportWebVitals.ts"
+      ],
+      "coverageThreshold": {
+        "global": {
+          "branches": 70,
+          "functions": 70,
+          "lines": 70,
+          "statements": 70
+        }
+      }
     }
   }
