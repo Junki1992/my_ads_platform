@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, DatePicker, InputNumber, message, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EditOutlined, PauseOutlined, PlayCircleOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, PauseOutlined, PlayCircleOutlined, DeleteOutlined, SyncOutlined, DownloadOutlined } from '@ant-design/icons';
 import campaignService, { Campaign, CampaignCreate } from '../services/campaignService';
 import adSetService, { AdSet } from '../services/adSetService';
 import adService, { Ad } from '../services/adService';
+import metaAccountService, { MetaAccount } from '../services/metaAccountService';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -23,6 +24,9 @@ const Campaigns: React.FC = () => {
   const [adsets, setAdsets] = useState<AdSet[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
+  const [selectedMetaAccountId, setSelectedMetaAccountId] = useState<number | null>(null);
 
   // キャンペーン一覧を取得
   const fetchCampaigns = async () => {
@@ -40,7 +44,18 @@ const Campaigns: React.FC = () => {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchMetaAccounts();
   }, []);
+
+  // Meta アカウント一覧を取得
+  const fetchMetaAccounts = async () => {
+    try {
+      const accounts = await metaAccountService.getMetaAccounts();
+      setMetaAccounts(accounts);
+    } catch (error) {
+      console.error('Failed to fetch Meta accounts:', error);
+    }
+  };
 
   // デモ制限アラートを追加
   const isDemoMode = campaigns.some(campaign => 
@@ -733,6 +748,30 @@ const Campaigns: React.FC = () => {
     }
   };
 
+  // Meta API からキャンペーンをインポート
+  const handleImportFromMeta = async () => {
+    if (!selectedMetaAccountId) {
+      message.error('Meta アカウントを選択してください');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await campaignService.importCampaignsFromMeta(selectedMetaAccountId);
+      
+      message.success(result.message);
+      setImportModalVisible(false);
+      setSelectedMetaAccountId(null);
+      fetchCampaigns();
+    } catch (error: any) {
+      console.error('Failed to import campaigns:', error);
+      const errorMessage = error.response?.data?.error || 'インポートに失敗しました';
+      message.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // キャンペーン全体（キャンペーン+広告セット+広告）のMeta API同期
   const handleSyncCampaignFull = async (campaign: Campaign) => {
     try {
@@ -992,6 +1031,13 @@ const Campaigns: React.FC = () => {
         title={t('campaignManagement')}
         extra={
           <Space>
+            <Button 
+              icon={<DownloadOutlined />} 
+              onClick={() => setImportModalVisible(true)}
+              title="Meta API からキャンペーンをインポート"
+            >
+              Meta からインポート
+            </Button>
             <Button 
               icon={<SyncOutlined />} 
               onClick={handleSyncAllCampaigns}
@@ -1403,6 +1449,43 @@ const Campaigns: React.FC = () => {
               )}
             </Card>
           </div>
+        )}
+      </Modal>
+
+      {/* Meta からインポートモーダル */}
+      <Modal
+        title="Meta API からキャンペーンをインポート"
+        open={importModalVisible}
+        onOk={handleImportFromMeta}
+        onCancel={() => {
+          setImportModalVisible(false);
+          setSelectedMetaAccountId(null);
+        }}
+        okText="インポート"
+        cancelText="キャンセル"
+        confirmLoading={loading}
+      >
+        <p>Meta 広告アカウントを選択してください。選択したアカウントのすべてのキャンペーンがインポートされます。</p>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Meta アカウントを選択"
+          value={selectedMetaAccountId}
+          onChange={setSelectedMetaAccountId}
+        >
+          {metaAccounts.map(account => (
+            <Option key={account.id} value={account.id}>
+              {account.account_name} ({account.account_id})
+            </Option>
+          ))}
+        </Select>
+        {metaAccounts.length === 0 && (
+          <Alert
+            message="Meta アカウントが登録されていません"
+            description="Settings ページで Meta アカウントを追加してください。"
+            type="warning"
+            showIcon
+            style={{ marginTop: 16 }}
+          />
         )}
       </Modal>
     </div>

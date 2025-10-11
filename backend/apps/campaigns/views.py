@@ -495,6 +495,89 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 'error': f'Meta API同期の開始に失敗しました: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['post'])
+    def import_from_meta(self, request):
+        """Meta API から広告アカウントのキャンペーンをインポート"""
+        try:
+            from apps.accounts.models import MetaAccount
+            import requests
+            
+            # Meta アカウント ID を取得
+            meta_account_id = request.data.get('meta_account_id')
+            if not meta_account_id:
+                return Response({
+                    'error': 'meta_account_id is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Meta アカウントを取得（自分のアカウントのみ）
+            try:
+                meta_account = MetaAccount.objects.get(
+                    id=meta_account_id,
+                    user=request.user
+                )
+            except MetaAccount.DoesNotExist:
+                return Response({
+                    'error': 'Meta アカウントが見つかりません'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Meta API からキャンペーン一覧を取得
+            api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/campaigns"
+            params = {
+                'access_token': meta_account.access_token,
+                'fields': 'id,name,status,objective,daily_budget,lifetime_budget,created_time,updated_time'
+            }
+            
+            response = requests.get(api_url, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"Meta API error: {response.text}")
+                return Response({
+                    'error': f'Meta API エラー: {response.text}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            data = response.json()
+            campaigns_data = data.get('data', [])
+            
+            # キャンペーンをインポート
+            imported_count = 0
+            skipped_count = 0
+            
+            for campaign_data in campaigns_data:
+                campaign_id = campaign_data.get('id')
+                
+                # 既に存在するキャンペーンはスキップ
+                if Campaign.objects.filter(campaign_id=campaign_id).exists():
+                    skipped_count += 1
+                    continue
+                
+                # キャンペーンを作成
+                Campaign.objects.create(
+                    user=request.user,
+                    meta_account=meta_account,
+                    campaign_id=campaign_id,
+                    name=campaign_data.get('name', ''),
+                    status=campaign_data.get('status', 'PAUSED'),
+                    objective=campaign_data.get('objective', 'OUTCOME_TRAFFIC'),
+                    budget=campaign_data.get('daily_budget') or campaign_data.get('lifetime_budget') or '0',
+                )
+                imported_count += 1
+            
+            logger.info(f"Imported {imported_count} campaigns, skipped {skipped_count}")
+            
+            return Response({
+                'status': 'success',
+                'imported': imported_count,
+                'skipped': skipped_count,
+                'total': len(campaigns_data),
+                'message': f'{imported_count}件のキャンペーンをインポートしました'
+            }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            logger.error(f"Failed to import campaigns from Meta: {str(e)}")
+            return Response({
+                'error': f'Meta APIからのインポートに失敗しました: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """キャンペーン統計とダッシュボードデータ"""

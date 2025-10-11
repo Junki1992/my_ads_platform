@@ -208,6 +208,20 @@ class CampaignService {
     return response.data;
   }
 
+  // Meta API からキャンペーンをインポート
+  async importCampaignsFromMeta(metaAccountId: number): Promise<{
+    status: string;
+    imported: number;
+    skipped: number;
+    total: number;
+    message: string;
+  }> {
+    const response = await api.post('/campaigns/campaigns/import_from_meta/', {
+      meta_account_id: metaAccountId
+    });
+    return response.data;
+  }
+
   // キャンペーン全体（キャンペーン+広告セット+広告）のMeta API同期
   async syncCampaignFullFromMeta(id: number): Promise<{
     status: string;
