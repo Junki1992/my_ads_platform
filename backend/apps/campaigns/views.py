@@ -551,6 +551,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     continue
                 
                 # キャンペーンを作成
+                from datetime import datetime, timedelta
+                
+                # デフォルトの日付を設定
+                start_date = datetime.now().date()
+                end_date = start_date + timedelta(days=30)
+                
                 Campaign.objects.create(
                     user=request.user,
                     meta_account=meta_account,
@@ -559,6 +565,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     status=campaign_data.get('status', 'PAUSED'),
                     objective=campaign_data.get('objective', 'OUTCOME_TRAFFIC'),
                     budget=campaign_data.get('daily_budget') or campaign_data.get('lifetime_budget') or '0',
+                    start_date=start_date,
+                    end_date=end_date,
                 )
                 imported_count += 1
             
