@@ -77,7 +77,7 @@ class AdSerializer(serializers.ModelSerializer):
             'id', 'ad_id', 'name', 'status',
             'creative_type', 'headline', 'description',
             'link_url', 'display_link', 'cta_type',
-            'creative',
+            'creative', 'review_feedback',
             'adset', 'adset_name',
             'created_at', 'updated_at'
         ]
