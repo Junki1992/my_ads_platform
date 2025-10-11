@@ -761,7 +761,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         review_feedback = {'overall_status': 'APPROVED'}
                     elif effective_status in ['PENDING_REVIEW', 'DISAPPROVED']:
                         review_feedback = {'overall_status': 'PENDING'}
-                    elif effective_status in ['REJECTED', 'ARCHIVED']:
+                    elif effective_status in ['REJECTED', 'ARCHIVED', 'WITH_ISSUES']:
                         review_feedback = {'overall_status': 'REJECTED'}
                     else:
                         review_feedback = {'overall_status': 'PENDING'}
