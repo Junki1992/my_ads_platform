@@ -664,7 +664,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
             api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/ads"
             params = {
                 'access_token': meta_account.access_token,
-                'fields': 'id,name,status,adset_id,creative,created_time,ad_review_feedback',
+                'fields': 'id,name,status,effective_status,adset_id,creative,created_time',
                 'expand': 'creative{object_story_spec{link_data{name,message,description,call_to_action_type,picture}}}'
             }
             
@@ -744,9 +744,23 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
                 logger.info(f"Final extracted - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
                 
-                # 審査状況を取得
-                review_feedback = ad_data.get('ad_review_feedback', {})
-                logger.info(f"Review feedback: {review_feedback}")
+                # 審査状況を取得（effective_status から判定）
+                effective_status = ad_data.get('effective_status', '')
+                logger.info(f"Effective status: {effective_status}")
+                
+                # effective_status から審査状況を判定
+                review_feedback = {}
+                if effective_status:
+                    if effective_status in ['ACTIVE', 'PAUSED']:
+                        review_feedback = {'overall_status': 'APPROVED'}
+                    elif effective_status in ['PENDING_REVIEW', 'DISAPPROVED']:
+                        review_feedback = {'overall_status': 'PENDING'}
+                    elif effective_status in ['REJECTED', 'ARCHIVED']:
+                        review_feedback = {'overall_status': 'REJECTED'}
+                    else:
+                        review_feedback = {'overall_status': 'PENDING'}
+                
+                logger.info(f"Review feedback (derived): {review_feedback}")
                 
                 # 広告を作成または更新
                 if existing_ad:
