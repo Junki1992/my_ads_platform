@@ -630,25 +630,26 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
                 logger.info(f"Processing adset: {adset_id} - {adset_data.get('name')}")
                 
-                # 既に存在する広告セットはスキップ
-                if AdSet.objects.filter(adset_id=adset_id).exists():
-                    logger.info(f"Adset {adset_id} already exists, skipping")
-                    continue
-                
-                # 広告セットを作成
-                adset = AdSet.objects.create(
-                    campaign=campaign,
+                # 広告セットを取得または作成
+                adset, adset_created = AdSet.objects.get_or_create(
                     adset_id=adset_id,
-                    name=adset_data.get('name', ''),
-                    status=adset_data.get('status', 'PAUSED'),
-                    bid_strategy=adset_data.get('bid_strategy', 'LOWEST_COST_WITHOUT_CAP'),
-                    optimization_goal=adset_data.get('optimization_goal', 'LINK_CLICKS'),
-                    budget=adset_data.get('daily_budget') or adset_data.get('lifetime_budget') or '0',
+                    defaults={
+                        'campaign': campaign,
+                        'name': adset_data.get('name', ''),
+                        'status': adset_data.get('status', 'PAUSED'),
+                        'bid_strategy': adset_data.get('bid_strategy', 'LOWEST_COST_WITHOUT_CAP'),
+                        'optimization_goal': adset_data.get('optimization_goal', 'LINK_CLICKS'),
+                        'budget': adset_data.get('daily_budget') or adset_data.get('lifetime_budget') or '0',
+                    }
                 )
                 
-                logger.info(f"Created adset: {adset.id} - {adset.name}")
+                if adset_created:
+                    logger.info(f"Created adset: {adset.id} - {adset.name}")
+                else:
+                    logger.info(f"Found existing adset: {adset.id} - {adset.name}")
                 
-                # 広告をインポート
+                # 既存の広告セットでも広告をインポート
+                logger.info(f"Importing ads for adset: {adset.name}")
                 self._import_ads_from_meta(adset, meta_account)
                 
         except Exception as e:
@@ -696,10 +697,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
                 logger.info(f"Processing ad: {ad_id} - {ad_data.get('name')}")
                 
-                # 既に存在する広告はスキップ
-                if Ad.objects.filter(ad_id=ad_id).exists():
-                    logger.info(f"Ad {ad_id} already exists, skipping")
-                    continue
+                # 広告を取得または作成（既存のものは更新）
+                existing_ad = Ad.objects.filter(ad_id=ad_id).first()
+                if existing_ad:
+                    logger.info(f"Found existing ad: {ad_id} - {existing_ad.name}")
+                else:
+                    logger.info(f"Creating new ad: {ad_id}")
                 
                 # クリエイティブ情報を抽出
                 creative_data = ad_data.get('creative', {})
@@ -715,19 +718,29 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
                 logger.info(f"Extracted - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
                 
-                # 広告を作成
-                ad = Ad.objects.create(
-                    adset=adset,
-                    ad_id=ad_id,
-                    name=ad_data.get('name', ''),
-                    status=ad_data.get('status', 'PAUSED'),
-                    creative_type='LINK',
-                    headline=headline,
-                    description=description,
-                    cta_type=cta_type,
-                )
-                
-                logger.info(f"Created ad: {ad.id} - {ad.name}")
+                # 広告を作成または更新
+                if existing_ad:
+                    # 既存の広告を更新
+                    existing_ad.name = ad_data.get('name', '')
+                    existing_ad.status = ad_data.get('status', 'PAUSED')
+                    existing_ad.headline = headline
+                    existing_ad.description = description
+                    existing_ad.cta_type = cta_type
+                    existing_ad.save()
+                    logger.info(f"Updated ad: {existing_ad.id} - {existing_ad.name}")
+                else:
+                    # 新しい広告を作成
+                    ad = Ad.objects.create(
+                        adset=adset,
+                        ad_id=ad_id,
+                        name=ad_data.get('name', ''),
+                        status=ad_data.get('status', 'PAUSED'),
+                        creative_type='LINK',
+                        headline=headline,
+                        description=description,
+                        cta_type=cta_type,
+                    )
+                    logger.info(f"Created ad: {ad.id} - {ad.name}")
                 
         except Exception as e:
             logger.error(f"Failed to import ads: {str(e)}")
