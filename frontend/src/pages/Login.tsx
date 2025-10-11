@@ -23,22 +23,38 @@ const Login: React.FC = () => {
         password: values.password,
       };
       
-      try {
-        await login(credentials);
-        navigate('/');
-      } catch (error: any) {
-        // ステータス202は2FAが必要
-        if (error.response?.status === 202 || error.response?.data?.requires_2fa) {
-          // 2FAが必要な場合、認証情報を保存してモーダルを表示
-          setLoginCredentials(credentials);
-          setTwoFactorModalVisible(true);
-          setLoading(false);
-          return;
-        } else {
-          throw error;
-        }
+      // 直接APIを呼び出して2FAチェック
+      const response = await api.post('/accounts/auth/login/', credentials);
+      
+      // 202レスポンス = 2FAが必要
+      if (response.status === 202 || response.data.requires_2fa) {
+        setLoginCredentials(credentials);
+        setTwoFactorModalVisible(true);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
+      
+      // 通常のログイン成功（2FA無効ユーザー）
+      const { user, tokens } = response.data;
+      localStorage.setItem('access_token', tokens.access);
+      localStorage.setItem('refresh_token', tokens.refresh);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      message.success('ログインしました');
+      window.location.href = '/';
+    } catch (error: any) {
+      // ステータス202もキャッチされるので、ここでもチェック
+      if (error.response?.status === 202 || error.response?.data?.requires_2fa) {
+        setLoginCredentials({
+          email: values.email,
+          password: values.password,
+        });
+        setTwoFactorModalVisible(true);
+        setLoading(false);
+        return;
+      }
+      
+      message.error(error.response?.data?.error || 'ログインに失敗しました');
       console.error('Login failed:', error);
     } finally {
       setLoading(false);
