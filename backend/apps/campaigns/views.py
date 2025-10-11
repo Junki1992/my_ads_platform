@@ -659,11 +659,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
         import requests
         
         try:
-            # 広告を取得
+            # 広告を取得（クリエイティブ情報も含める）
             api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/ads"
             params = {
                 'access_token': meta_account.access_token,
-                'fields': 'id,name,status,adset_id,creative,created_time'
+                'fields': 'id,name,status,adset_id,creative,created_time',
+                'expand': 'creative{object_story_spec{link_data{name,message,description,call_to_action_type,picture}}}'
             }
             
             logger.info(f"Fetching ads for adset {adset.adset_id}")
@@ -700,6 +701,20 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     logger.info(f"Ad {ad_id} already exists, skipping")
                     continue
                 
+                # クリエイティブ情報を抽出
+                creative_data = ad_data.get('creative', {})
+                object_story_spec = creative_data.get('object_story_spec', {})
+                link_data = object_story_spec.get('link_data', {})
+                
+                logger.info(f"Creative data for ad {ad_id}: {creative_data}")
+                logger.info(f"Link data: {link_data}")
+                
+                headline = link_data.get('name', '')
+                description = link_data.get('message', '')
+                cta_type = link_data.get('call_to_action_type', 'LEARN_MORE')
+                
+                logger.info(f"Extracted - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
+                
                 # 広告を作成
                 ad = Ad.objects.create(
                     adset=adset,
@@ -707,9 +722,9 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     name=ad_data.get('name', ''),
                     status=ad_data.get('status', 'PAUSED'),
                     creative_type='LINK',
-                    headline='',
-                    description='',
-                    cta_type='LEARN_MORE',
+                    headline=headline,
+                    description=description,
+                    cta_type=cta_type,
                 )
                 
                 logger.info(f"Created ad: {ad.id} - {ad.name}")
