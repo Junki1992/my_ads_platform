@@ -1,26 +1,96 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Tabs, message } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Card, Tabs, message, Modal, Space, Alert } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import twoFactorService from '../services/twoFactorService';
+import api from '../services/api';
 
 const Login: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { login, register } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [twoFactorModalVisible, setTwoFactorModalVisible] = useState(false);
+  const [loginCredentials, setLoginCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [useBackupCode, setUseBackupCode] = useState(false);
 
   const handleLogin = async (values: any) => {
     setLoading(true);
     try {
-      await login({
+      // まず通常のログインを試行
+      const credentials = {
         email: values.email,
         password: values.password,
-      });
-      navigate('/');
+      };
+      
+      // ユーザーの2FAステータスを確認（ログイン前）
+      // 実際の実装では、バックエンドが2FA必要かどうかを返す必要がありますが、
+      // 簡易実装として、まずログインを試みる
+      try {
+        await login(credentials);
+        navigate('/');
+      } catch (error: any) {
+        // 2FA が必要な場合のエラーをチェック
+        if (error.response?.data?.requires_2fa) {
+          // 2FAが必要な場合、モーダルを表示
+          setLoginCredentials(credentials);
+          setTwoFactorModalVisible(true);
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
       console.error('Login failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handle2FAVerify = async (values: { token: string }) => {
+    if (!loginCredentials) return;
+    
+    setLoading(true);
+    try {
+      // 2FAトークンを検証
+      const verifyResult = await twoFactorService.verify(values.token);
+      
+      if (verifyResult.valid) {
+        // トークンが有効な場合、ログインを完了
+        await login(loginCredentials);
+        message.success('ログインしました');
+        setTwoFactorModalVisible(false);
+        navigate('/');
+      } else {
+        message.error('認証コードが正しくありません');
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '認証に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleBackupCodeVerify = async (values: { backup_code: string }) => {
+    if (!loginCredentials) return;
+    
+    setLoading(true);
+    try {
+      // バックアップコードを検証
+      const verifyResult = await twoFactorService.verifyBackupCode(values.backup_code);
+      
+      if (verifyResult.valid) {
+        // バックアップコードが有効な場合、ログインを完了
+        await login(loginCredentials);
+        message.success('ログインしました');
+        setTwoFactorModalVisible(false);
+        navigate('/');
+      } else {
+        message.error('バックアップコードが正しくありません');
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '認証に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -197,6 +267,100 @@ const Login: React.FC = () => {
           ]}
         />
       </Card>
+
+      {/* 2段階認証モーダル */}
+      <Modal
+        title={
+          <Space>
+            <SafetyOutlined />
+            <span>2段階認証</span>
+          </Space>
+        }
+        open={twoFactorModalVisible}
+        onCancel={() => {
+          setTwoFactorModalVisible(false);
+          setUseBackupCode(false);
+        }}
+        footer={null}
+        width={450}
+      >
+        {!useBackupCode ? (
+          <Form onFinish={handle2FAVerify} layout="vertical">
+            <Alert
+              message="認証コードを入力してください"
+              description="認証アプリに表示されている6桁のコードを入力してください。"
+              type="info"
+              showIcon
+              style={{ marginBottom: 24 }}
+            />
+
+            <Form.Item
+              name="token"
+              rules={[
+                { required: true, message: '認証コードを入力してください' },
+                { len: 6, message: '6桁のコードを入力してください' },
+              ]}
+            >
+              <Input
+                placeholder="123456"
+                maxLength={6}
+                autoFocus
+                style={{ 
+                  fontSize: '32px', 
+                  textAlign: 'center', 
+                  letterSpacing: '12px',
+                  height: '60px'
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">
+                確認
+              </Button>
+            </Form.Item>
+
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <Button type="link" onClick={() => setUseBackupCode(true)}>
+                バックアップコードを使用
+              </Button>
+            </div>
+          </Form>
+        ) : (
+          <Form onFinish={handleBackupCodeVerify} layout="vertical">
+            <Alert
+              message="バックアップコードを入力してください"
+              description="保存していたバックアップコードのいずれかを入力してください。"
+              type="warning"
+              showIcon
+              style={{ marginBottom: 24 }}
+            />
+
+            <Form.Item
+              name="backup_code"
+              rules={[{ required: true, message: 'バックアップコードを入力してください' }]}
+            >
+              <Input
+                placeholder="1234-5678"
+                autoFocus
+                style={{ fontSize: '18px', textAlign: 'center' }}
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">
+                確認
+              </Button>
+            </Form.Item>
+
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <Button type="link" onClick={() => setUseBackupCode(false)}>
+                認証コードを使用
+              </Button>
+            </div>
+          </Form>
+        )}
+      </Modal>
     </div>
   );
 };

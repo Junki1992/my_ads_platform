@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Popconfirm, Modal, Alert, Tabs } from 'antd';
+import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Popconfirm, Modal, Alert, Tabs, Badge } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
-import { EditOutlined, DeleteOutlined, SaveOutlined, SwapOutlined, PlusOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import twoFactorService from '../services/twoFactorService';
+import { EditOutlined, DeleteOutlined, SaveOutlined, SwapOutlined, PlusOutlined, CheckCircleOutlined, SafetyOutlined } from '@ant-design/icons';
+import TwoFactorSetup from '../components/TwoFactorSetup';
+import TwoFactorDisable from '../components/TwoFactorDisable';
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -39,6 +42,11 @@ const Settings: React.FC = () => {
   const [fetchingAccounts, setFetchingAccounts] = useState(false);
   const [selectedFetchedAccount, setSelectedFetchedAccount] = useState<MetaAdAccount | null>(null);
   const [tokenInfo, setTokenInfo] = useState<any>(null);
+  
+  // 2FA関連
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [twoFactorSetupVisible, setTwoFactorSetupVisible] = useState(false);
+  const [twoFactorDisableVisible, setTwoFactorDisableVisible] = useState(false);
 
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -76,7 +84,17 @@ const Settings: React.FC = () => {
     
     loadUserSettings();
     loadMetaAccounts();
+    loadTwoFactorStatus();
   }, [form, i18n.language]);
+  
+  const loadTwoFactorStatus = async () => {
+    try {
+      const status = await twoFactorService.getStatus();
+      setTwoFactorEnabled(status.enabled);
+    } catch (error) {
+      console.error('Failed to load 2FA status:', error);
+    }
+  };
 
   const loadMetaAccounts = async () => {
     try {
@@ -421,6 +439,57 @@ const Settings: React.FC = () => {
       </Card>
 
       <Card 
+        title={
+          <Space>
+            <SafetyOutlined />
+            <span>セキュリティ設定</span>
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Space>
+                    <strong>2段階認証</strong>
+                    {twoFactorEnabled && (
+                      <Badge status="success" text="有効" />
+                    )}
+                  </Space>
+                  <div style={{ color: '#666', fontSize: '14px', marginTop: 8 }}>
+                    {twoFactorEnabled
+                      ? 'アカウントは2段階認証で保護されています'
+                      : 'ログイン時に追加の認証コードが必要になります'}
+                  </div>
+                </div>
+                <div>
+                  {twoFactorEnabled ? (
+                    <Button danger onClick={() => setTwoFactorDisableVisible(true)}>
+                      無効化
+                    </Button>
+                  ) : (
+                    <Button type="primary" onClick={() => setTwoFactorSetupVisible(true)}>
+                      有効化
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Divider style={{ margin: '16px 0' }} />
+
+            <div style={{ color: '#666', fontSize: '14px' }}>
+              <SafetyOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+              <strong>推奨: </strong>
+              アカウントのセキュリティを強化するため、2段階認証を有効にすることを強くお勧めします。
+            </div>
+          </Space>
+        </div>
+      </Card>
+
+      <Card 
         title={t('metaApiSettings')}
         style={{ marginBottom: 24 }}
       >
@@ -719,6 +788,22 @@ const Settings: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      <TwoFactorSetup
+        visible={twoFactorSetupVisible}
+        onClose={() => setTwoFactorSetupVisible(false)}
+        onSuccess={() => {
+          loadTwoFactorStatus();
+        }}
+      />
+
+      <TwoFactorDisable
+        visible={twoFactorDisableVisible}
+        onClose={() => setTwoFactorDisableVisible(false)}
+        onSuccess={() => {
+          loadTwoFactorStatus();
+        }}
+      />
     </div>
   );
 };
