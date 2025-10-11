@@ -1429,6 +1429,28 @@ const Campaigns: React.FC = () => {
                       width: 120,
                     },
                     {
+                      title: '審査状況',
+                      dataIndex: 'review_feedback',
+                      key: 'review_feedback',
+                      width: 120,
+                      render: (review_feedback: any) => {
+                        if (!review_feedback || !review_feedback.overall_status) {
+                          return <Tag color="default">不明</Tag>;
+                        }
+                        
+                        const status = review_feedback.overall_status;
+                        const color = status === 'APPROVED' ? 'green' : 
+                                    status === 'PENDING' ? 'orange' : 
+                                    status === 'REJECTED' ? 'red' : 'default';
+                        
+                        const text = status === 'APPROVED' ? '承認済み' :
+                                   status === 'PENDING' ? '審査中' :
+                                   status === 'REJECTED' ? '却下' : status;
+                        
+                        return <Tag color={color}>{text}</Tag>;
+                      },
+                    },
+                    {
                       title: '操作',
                       key: 'actions',
                       width: 120,

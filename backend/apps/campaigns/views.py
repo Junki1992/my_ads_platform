@@ -660,11 +660,11 @@ class CampaignViewSet(viewsets.ModelViewSet):
         import requests
         
         try:
-            # 広告を取得（クリエイティブ情報も含める）
+            # 広告を取得（クリエイティブ情報と審査状況も含める）
             api_url = f"https://graph.facebook.com/v22.0/act_{meta_account.account_id}/ads"
             params = {
                 'access_token': meta_account.access_token,
-                'fields': 'id,name,status,adset_id,creative,created_time',
+                'fields': 'id,name,status,adset_id,creative,created_time,ad_review_feedback',
                 'expand': 'creative{object_story_spec{link_data{name,message,description,call_to_action_type,picture}}}'
             }
             
@@ -744,6 +744,10 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
                 logger.info(f"Final extracted - Headline: '{headline}', Description: '{description}', CTA: '{cta_type}'")
                 
+                # 審査状況を取得
+                review_feedback = ad_data.get('ad_review_feedback', {})
+                logger.info(f"Review feedback: {review_feedback}")
+                
                 # 広告を作成または更新
                 if existing_ad:
                     # 既存の広告を更新
@@ -752,6 +756,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     existing_ad.headline = headline
                     existing_ad.description = description
                     existing_ad.cta_type = cta_type
+                    existing_ad.review_feedback = review_feedback
                     existing_ad.save()
                     logger.info(f"Updated ad: {existing_ad.id} - {existing_ad.name}")
                 else:
@@ -765,6 +770,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         headline=headline,
                         description=description,
                         cta_type=cta_type,
+                        review_feedback=review_feedback,
                     )
                     logger.info(f"Created ad: {ad.id} - {ad.name}")
                 

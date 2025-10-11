@@ -234,6 +234,20 @@ class Ad(models.Model):
     # FacebookページID（広告作成に必要）
     facebook_page_id = models.CharField(max_length=50, blank=True, null=True)
     
+    # 審査状況
+    review_feedback = models.JSONField(default=dict, blank=True)
+    # review_feedback構造例:
+    # {
+    #   "overall_status": "APPROVED", // APPROVED, PENDING, REJECTED
+    #   "details": [
+    #     {
+    #       "field": "creative",
+    #       "status": "APPROVED",
+    #       "message": "Creative approved"
+    #     }
+    #   ]
+    # }
+    
     # メディア設定
     creative = models.JSONField(default=dict)
     # creative構造例:
