@@ -545,34 +545,33 @@ class CampaignViewSet(viewsets.ModelViewSet):
             for campaign_data in campaigns_data:
                 campaign_id = campaign_data.get('id')
                 
-                # 既に存在するキャンペーンはスキップ
-                if Campaign.objects.filter(campaign_id=campaign_id).exists():
-                    skipped_count += 1
-                    continue
-                
-                # キャンペーンを作成
+                # キャンペーンを取得または作成
                 from datetime import datetime, timedelta
                 
-                # デフォルトの日付を設定
-                start_date = datetime.now().date()
-                end_date = start_date + timedelta(days=30)
-                
-                campaign = Campaign.objects.create(
-                    user=request.user,
-                    meta_account=meta_account,
+                campaign, created = Campaign.objects.get_or_create(
                     campaign_id=campaign_id,
-                    name=campaign_data.get('name', ''),
-                    status=campaign_data.get('status', 'PAUSED'),
-                    objective=campaign_data.get('objective', 'OUTCOME_TRAFFIC'),
-                    budget=campaign_data.get('daily_budget') or campaign_data.get('lifetime_budget') or '0',
-                    start_date=start_date,
-                    end_date=end_date,
+                    defaults={
+                        'user': request.user,
+                        'meta_account': meta_account,
+                        'name': campaign_data.get('name', ''),
+                        'status': campaign_data.get('status', 'PAUSED'),
+                        'objective': campaign_data.get('objective', 'OUTCOME_TRAFFIC'),
+                        'budget': campaign_data.get('daily_budget') or campaign_data.get('lifetime_budget') or '0',
+                        'start_date': datetime.now().date(),
+                        'end_date': datetime.now().date() + timedelta(days=30),
+                    }
                 )
                 
-                # 広告セットをインポート
-                self._import_adsets_from_meta(campaign, meta_account)
+                if created:
+                    logger.info(f"Created new campaign: {campaign.name} (Meta ID: {campaign.campaign_id})")
+                    imported_count += 1
+                else:
+                    logger.info(f"Found existing campaign: {campaign.name} (Meta ID: {campaign.campaign_id})")
+                    skipped_count += 1
                 
-                imported_count += 1
+                # 既存のキャンペーンでも広告セットと広告をインポート
+                logger.info(f"Importing adsets and ads for campaign: {campaign.name}")
+                self._import_adsets_from_meta(campaign, meta_account)
             
             logger.info(f"Imported {imported_count} campaigns, skipped {skipped_count}")
             
