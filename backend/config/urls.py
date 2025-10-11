@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/integrations/', include('apps.integrations.urls')),
     path('api/i18n/', include('apps.i18n.urls')),
     path('api/demo/', include('apps.demo.urls')),
+    path('api/billing/', include('apps.billing.urls')),
     path('', include('apps.demo.urls')),  # ルートURLを追加
 ]
 

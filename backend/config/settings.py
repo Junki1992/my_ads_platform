@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'apps.integrations',
     'apps.i18n',
     'apps.demo',
+    'apps.billing',
 ]
 
 MIDDLEWARE = [
@@ -169,6 +170,14 @@ CELERY_TASK_SOFT_TIME_LIMIT = 60
 META_APP_ID = config('META_APP_ID', default='')
 META_APP_SECRET = config('META_APP_SECRET', default='')
 META_ACCESS_TOKEN = config('META_ACCESS_TOKEN', default='')
+
+# Stripe設定
+STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
+
+# Frontend URL
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
 # Slack設定
 SLACK_BOT_TOKEN = config('SLACK_BOT_TOKEN', default='')
