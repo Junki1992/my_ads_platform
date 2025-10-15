@@ -22,7 +22,7 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 ### その他
 - ✅ アラート機能
 - 🚧 レポート機能
-- ✅ 課金システム（Stripe連携）- フィーチャーフラグで制御可能
+- 🚧 課金システム（開発中）
 
 ## 技術スタック
 
@@ -35,7 +35,7 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - 二要素認証（pyotp + qrcode）
 - Rate Limiting（django-ratelimit）
 - テスト（pytest + pytest-django）
-- Stripe決済（予定）
+- Stripe決済（開発中）
 
 ### Frontend
 - React 18
@@ -63,10 +63,8 @@ cp env.example .env
 - `SECRET_KEY`: Django シークレットキー
 - `JWT_SECRET_KEY`: JWT トークン用シークレットキー
 - `META_APP_ID`, `META_APP_SECRET`: Meta API認証情報
-- `STRIPE_SECRET_KEY`: Stripe決済キー（本番環境）
 - `REDIS_URL`: Redis接続URL
 - `SENTRY_DSN`: エラー監視（オプション）
-- `ENABLE_BILLING`: 課金機能の有効/無効（デフォルト: False）
 
 ### Backend
 
@@ -166,21 +164,7 @@ npm test
 
 ## フィーチャーフラグ
 
-### 課金機能の制御
-
-本番環境で課金機能を無効化する場合：
-
-**バックエンド (.env)**:
-```bash
-ENABLE_BILLING=False
-```
-
-**フロントエンド (.env)**:
-```bash
-REACT_APP_ENABLE_BILLING=false
-```
-
-課金機能をリリースする準備ができたら、`True`に変更してサーバーを再起動してください。
+開発中の機能はフィーチャーフラグで制御されています。
 
 詳細は [docs/feature_flags.md](docs/feature_flags.md) を参照。
 
@@ -195,7 +179,7 @@ REACT_APP_ENABLE_BILLING=false
 3. `SECRET_KEY`と`JWT_SECRET_KEY`を変更
 4. PostgreSQLデータベースを設定
 5. Redisを設定
-6. **`ENABLE_BILLING=False`を設定（課金機能を無効化）**
+6. フィーチャーフラグを適切に設定
 7. 静的ファイルを収集: `python manage.py collectstatic`
 
 ### セキュリティチェックリスト
@@ -209,7 +193,7 @@ REACT_APP_ENABLE_BILLING=false
 - [ ] Sentryの設定（エラー監視）
 - [x] Rate Limiting実装済み
 - [x] 二要素認証実装済み
-- [ ] Stripe Webhookシークレット設定
+- [ ] 決済システム設定（本番環境）
 - [ ] バックアップ戦略の確立
 
 ## ポートフォリオ
@@ -246,7 +230,7 @@ REACT_APP_ENABLE_BILLING=false
 - このリポジトリは商用化を目指した開発プロジェクトです
 - 実際のMeta APIキーは含まれていません
 - 本番環境での使用には適切なセキュリティ設定が必要です
-- 現在開発中の機能: Stripe決済連携、サブスクリプション管理
+- 現在開発中の機能: 決済システム、サブスクリプション管理
 
 ## ライセンス
 
