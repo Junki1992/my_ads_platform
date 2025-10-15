@@ -682,5 +682,28 @@
   "step1CreateApp": "Facebook Developer Console에서 앱을 생성",
   "step2GetToken": "광고 관리 시스템에서 액세스 토큰을 획득",
   "step3RegisterAccount": "아래 \"+ Meta 계정 추가\" 버튼으로 계정 정보를 등록",
-  "noteValidTokenRequired": "주의: 실제 Meta API에 연결하려면 유효한 액세스 토큰이 필요합니다."
+  "noteValidTokenRequired": "주의: 실제 Meta API에 연결하려면 유효한 액세스 토큰이 필요합니다.",
+  "help": {
+    "title": "도움말 센터",
+    "quickHelp": "빠른 도움말",
+    "searchPlaceholder": "도움말 검색...",
+    "noResults": "검색 결과를 찾을 수 없습니다",
+    "viewDetails": "자세히 보기",
+    "close": "닫기",
+    "steps": "단계별 가이드",
+    "videoGuide": "비디오 가이드",
+    "watchVideo": "비디오 보기",
+    "quickTips": "빠른 팁",
+    "learnMore": "자세히 알아보기",
+    "stepByStepGuide": "단계별 가이드",
+    "categories": {
+      "all": "전체",
+      "dashboard": "대시보드",
+      "campaigns": "캠페인",
+      "upload": "업로드",
+      "alerts": "알림",
+      "settings": "설정"
+    },
+    "selectCategory": "카테고리를 선택해주세요"
+  }
 }

@@ -771,6 +771,7 @@
       "alerts": "Alerts",
       "settings": "Settings"
     },
+    "selectCategory": "Please select a category",
     "dashboard": {
       "title": "How to Use Dashboard",
       "content": "The dashboard shows an overview and performance metrics of all your campaigns.",

@@ -36,7 +36,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
   page, 
   showQuickHelp = true, 
   context 
-}): React.ReactElement => {
+}): JSX.Element => {
   const { t, i18n } = useTranslation();
   const [helpVisible, setHelpVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -55,10 +55,16 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
         category_name_en: 'Dashboard',
         title: isJapanese ? 'ダッシュボードの使い方' : 'How to use Dashboard',
         title_en: 'How to use Dashboard',
+        title_ko: '대시보드 사용법',
+        title_zh: '仪表板使用方法',
         summary: isJapanese ? 'ダッシュボードでは、広告のパフォーマンスを一目で確認できます。' : 'The dashboard allows you to view your ad performance at a glance.',
         summary_en: 'The dashboard allows you to view your ad performance at a glance.',
+        summary_ko: '대시보드에서 광고 성과를 한눈에 확인할 수 있습니다.',
+        summary_zh: '仪表板可以一目了然地查看广告效果。',
         content: isJapanese ? 'ダッシュボードでは、広告のパフォーマンスを一目で確認できます。' : 'The dashboard allows you to view your ad performance at a glance.',
         content_en: 'The dashboard allows you to view your ad performance at a glance.',
+        content_ko: '대시보드에서 광고 성과를 한눈에 확인할 수 있습니다.',
+        content_zh: '仪表板可以一目了然地查看广告效果。',
         article_type: 'text',
         tags: ['overview', 'basics'],
         order: 1,
@@ -76,10 +82,16 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
         category_name_en: 'Settings',
         title: isJapanese ? 'アカウント設定の変更方法' : 'How to change account settings',
         title_en: 'How to change account settings',
+        title_ko: '계정 설정 변경 방법',
+        title_zh: '更改账户设置的方法',
         summary: isJapanese ? 'アカウント設定では、会社情報や言語設定を変更できます。' : 'You can change company information and language settings in account settings.',
         summary_en: 'You can change company information and language settings in account settings.',
+        summary_ko: '계정 설정에서 회사 정보나 언어 설정을 변경할 수 있습니다.',
+        summary_zh: '可以在账户设置中更改公司信息和语言设置。',
         content: isJapanese ? 'アカウント設定では、会社情報や言語設定を変更できます。' : 'You can change company information and language settings in account settings.',
         content_en: 'You can change company information and language settings in account settings.',
+        content_ko: '계정 설정에서 회사 정보나 언어 설정을 변경할 수 있습니다.',
+        content_zh: '可以在账户设置中更改公司信息和语言设置。',
         article_type: 'steps',
         tags: ['settings', 'account'],
         order: 2,
@@ -168,9 +180,26 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
     setSelectedCategory(category);
   };
 
-  const renderHelpContent = (item: HelpArticle): React.ReactElement => {
-    const title = i18n.language === 'ja' ? item.title : item.title_en;
-    const summary = i18n.language === 'ja' ? item.summary : item.summary_en;
+  const renderHelpContent = (item: HelpArticle): JSX.Element => {
+    // 言語に応じて適切なフィールドを選択
+    let title, summary;
+    switch (i18n.language) {
+      case 'ja':
+        title = item.title;
+        summary = item.summary;
+        break;
+      case 'ko':
+        title = item.title_ko || item.title_en;
+        summary = item.summary_ko || item.summary_en;
+        break;
+      case 'zh':
+        title = item.title_zh || item.title_en;
+        summary = item.summary_zh || item.summary_en;
+        break;
+      default:
+        title = item.title_en;
+        summary = item.summary_en;
+    }
     
     return (
       <Card
@@ -223,7 +252,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
     );
   };
 
-  const renderHelpModal = (): React.ReactElement => (
+  const renderHelpModal = (): JSX.Element => (
     <Modal
       title={
         <Space>
@@ -241,7 +270,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
         {/* カテゴリフィルター */}
         <div>
           <Text strong style={{ marginBottom: 8, display: 'block' }}>
-            カテゴリを選択してください
+            {t('help.selectCategory')}
           </Text>
           {categories.map(cat => (
             <Button
@@ -272,9 +301,33 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
     </Modal>
   );
 
-  const renderItemDetail = (): React.ReactElement => (
+  const renderItemDetail = (): JSX.Element => {
+    // 言語に応じて適切なタイトルを選択
+    let modalTitle = '';
+    let modalContent = '';
+    if (selectedItem) {
+      switch (i18n.language) {
+        case 'ja':
+          modalTitle = selectedItem.title;
+          modalContent = selectedItem.content;
+          break;
+        case 'ko':
+          modalTitle = selectedItem.title_ko || selectedItem.title_en;
+          modalContent = selectedItem.content_ko || selectedItem.content_en;
+          break;
+        case 'zh':
+          modalTitle = selectedItem.title_zh || selectedItem.title_en;
+          modalContent = selectedItem.content_zh || selectedItem.content_en;
+          break;
+        default:
+          modalTitle = selectedItem.title_en;
+          modalContent = selectedItem.content_en;
+      }
+    }
+
+    return (
     <Modal
-      title={selectedItem ? (i18n.language === 'ja' ? selectedItem.title : selectedItem.title_en) : ''}
+      title={modalTitle}
       open={!!selectedItem}
       onCancel={() => setSelectedItem(null)}
       width={800}
@@ -320,7 +373,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
                 }}>{children}</blockquote>
               }}
             >
-              {i18n.language === 'ja' ? selectedItem.content : selectedItem.content_en}
+              {modalContent}
             </ReactMarkdown>
           </div>
           
@@ -348,6 +401,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
       )}
     </Modal>
   );
+  };
 
   return (
     <>

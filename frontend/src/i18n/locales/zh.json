@@ -682,5 +682,28 @@
   "step1CreateApp": "在Facebook Developer Console中创建应用",
   "step2GetToken": "从广告管理系统获取访问令牌",
   "step3RegisterAccount": "使用下面的\"+ 添加Meta账户\"按钮注册账户信息",
-  "noteValidTokenRequired": "注意：连接到实际的Meta API需要有效的访问令牌。"
+  "noteValidTokenRequired": "注意：连接到实际的Meta API需要有效的访问令牌。",
+  "help": {
+    "title": "帮助中心",
+    "quickHelp": "快速帮助",
+    "searchPlaceholder": "搜索帮助...",
+    "noResults": "未找到搜索结果",
+    "viewDetails": "查看详情",
+    "close": "关闭",
+    "steps": "步骤指南",
+    "videoGuide": "视频指南",
+    "watchVideo": "观看视频",
+    "quickTips": "快速提示",
+    "learnMore": "了解更多",
+    "stepByStepGuide": "分步指南",
+    "categories": {
+      "all": "全部",
+      "dashboard": "仪表板",
+      "campaigns": "广告系列",
+      "upload": "上传",
+      "alerts": "警报",
+      "settings": "设置"
+    },
+    "selectCategory": "请选择类别"
+  }
 }
