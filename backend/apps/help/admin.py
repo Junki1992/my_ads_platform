@@ -29,7 +29,7 @@ class HelpArticleAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('基本情報', {
-            'fields': ('category', 'title', 'title_en', 'summary', 'summary_en', 'content', 'content_en')
+            'fields': ('category', 'title', 'title_en', 'title_ko', 'title_zh', 'summary', 'summary_en', 'summary_ko', 'summary_zh', 'content', 'content_en', 'content_ko', 'content_zh')
         }),
         ('設定', {
             'fields': (

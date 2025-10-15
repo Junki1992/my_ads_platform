@@ -28,7 +28,9 @@ class HelpArticleSerializer(serializers.ModelSerializer):
         model = HelpArticle
         fields = [
             'id', 'category', 'category_name', 'category_name_en',
-            'title', 'title_en', 'summary', 'summary_en', 'content', 'content_en',
+            'title', 'title_en', 'title_ko', 'title_zh',
+            'summary', 'summary_en', 'summary_ko', 'summary_zh',
+            'content', 'content_en', 'content_ko', 'content_zh',
             'article_type', 'tags', 'video_url', 'external_url',
             'page_context', 'element_selector', 'order',
             'is_featured', 'is_active', 'view_count',
@@ -54,7 +56,9 @@ class HelpArticleListSerializer(serializers.ModelSerializer):
         model = HelpArticle
         fields = [
             'id', 'category', 'category_name', 'category_name_en',
-            'title', 'title_en', 'summary', 'summary_en', 'article_type', 'tags',
+            'title', 'title_en', 'title_ko', 'title_zh',
+            'summary', 'summary_en', 'summary_ko', 'summary_zh',
+            'article_type', 'tags',
             'page_context', 'element_selector', 'is_featured',
             'view_count', 'created_at'
         ]
