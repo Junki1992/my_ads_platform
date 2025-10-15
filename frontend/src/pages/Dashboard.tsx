@@ -8,6 +8,8 @@ import {
   SyncOutlined,
 } from '@ant-design/icons';
 import campaignService, { DashboardStats } from '../services/campaignService';
+import HelpSystem from '../components/HelpSystem';
+import QuickHelpTooltip, { HelpContents } from '../components/QuickHelpTooltip';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -116,52 +118,63 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <div style={{ marginBottom: 16, textAlign: 'right' }}>
-        <Button 
-          type="primary" 
-          icon={<SyncOutlined />}
-          onClick={fetchDashboardData}
-          loading={loading}
-        >
-          {t('syncFromMetaApi')}
-        </Button>
+        <QuickHelpTooltip helpContent={HelpContents.dashboard.sync}>
+          <Button 
+            type="primary" 
+            icon={<SyncOutlined />}
+            onClick={fetchDashboardData}
+            loading={loading}
+            id="sync-button"
+          >
+            {t('syncFromMetaApi')}
+          </Button>
+        </QuickHelpTooltip>
       </div>
       
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }} className="dashboard-stats">
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title={t('totalBudget')}
-              value={Math.round(summary.total_budget)}
-              prefix="¥"
-            />
-          </Card>
+          <QuickHelpTooltip helpContent={HelpContents.dashboard.stats}>
+            <Card>
+              <Statistic
+                title={t('totalBudget')}
+                value={Math.round(summary.total_budget)}
+                prefix="¥"
+              />
+            </Card>
+          </QuickHelpTooltip>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title={t('totalSpend')}
-              value={Math.round(summary.total_spend)}
-              prefix="¥"
-            />
-          </Card>
+          <QuickHelpTooltip helpContent={HelpContents.dashboard.stats}>
+            <Card>
+              <Statistic
+                title={t('totalSpend')}
+                value={Math.round(summary.total_spend)}
+                prefix="¥"
+              />
+            </Card>
+          </QuickHelpTooltip>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title={t('totalImpressions')}
-              value={summary.total_impressions}
-              prefix={<EyeOutlined />}
-            />
-          </Card>
+          <QuickHelpTooltip helpContent={HelpContents.dashboard.stats}>
+            <Card>
+              <Statistic
+                title={t('totalImpressions')}
+                value={summary.total_impressions}
+                prefix={<EyeOutlined />}
+              />
+            </Card>
+          </QuickHelpTooltip>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title={t('totalClicks')}
-              value={summary.total_clicks}
-              prefix={<AimOutlined />}
-            />
-          </Card>
+          <QuickHelpTooltip helpContent={HelpContents.dashboard.stats}>
+            <Card>
+              <Statistic
+                title={t('totalClicks')}
+                value={summary.total_clicks}
+                prefix={<AimOutlined />}
+              />
+            </Card>
+          </QuickHelpTooltip>
         </Col>
       </Row>
 
@@ -194,6 +207,9 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* ヘルプシステム */}
+      <HelpSystem page="dashboard" />
     </div>
   );
 };

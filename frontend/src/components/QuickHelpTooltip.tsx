@@ -14,12 +14,12 @@ const { Text, Paragraph } = Typography;
 interface HelpContent {
   id: string;
   type: 'text' | 'steps' | 'video' | 'link';
-  title: string;
-  content: string;
-  steps?: string[];
+  titleKey: string;
+  contentKey: string;
+  stepsKeys?: string[];
   videoUrl?: string;
   linkUrl?: string;
-  tags?: string[];
+  tagsKeys?: string[];
 }
 
 interface QuickHelpTooltipProps {
@@ -54,14 +54,14 @@ const QuickHelpTooltip: React.FC<QuickHelpTooltipProps> = ({
         return (
           <div style={contentStyle}>
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Text strong>{helpContent.title}</Text>
-              <Paragraph style={{ margin: 0, fontSize: 13 }}>
-                {helpContent.content}
+              <Text strong style={{ color: '#000000' }}>{t(helpContent.titleKey)}</Text>
+              <Paragraph style={{ margin: 0, fontSize: 13, color: '#000000' }}>
+                {t(helpContent.contentKey)}
               </Paragraph>
-              {helpContent.tags && (
+              {helpContent.tagsKeys && (
                 <div>
-                  {helpContent.tags.map(tag => (
-                    <Tag key={tag} color="blue">{tag}</Tag>
+                  {helpContent.tagsKeys.map(tagKey => (
+                    <Tag key={tagKey} color="blue">{t(tagKey)}</Tag>
                   ))}
                 </div>
               )}
@@ -73,19 +73,19 @@ const QuickHelpTooltip: React.FC<QuickHelpTooltipProps> = ({
         return (
           <div style={contentStyle}>
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Text strong>{helpContent.title}</Text>
+              <Text strong style={{ color: '#000000' }}>{t(helpContent.titleKey)}</Text>
               <div>
-                {helpContent.steps?.map((step, index) => (
+                {helpContent.stepsKeys?.map((stepKey, index) => (
                   <div key={index} style={{ marginBottom: 8 }}>
                     <Text strong style={{ color: '#1890ff' }}>{index + 1}. </Text>
-                    <Text style={{ fontSize: 13 }}>{step}</Text>
+                    <Text style={{ fontSize: 13, color: '#000000' }}>{t(stepKey)}</Text>
                   </div>
                 ))}
               </div>
-              {helpContent.tags && (
+              {helpContent.tagsKeys && (
                 <div>
-                  {helpContent.tags.map(tag => (
-                    <Tag key={tag} color="green">{tag}</Tag>
+                  {helpContent.tagsKeys.map(tagKey => (
+                    <Tag key={tagKey} color="green">{t(tagKey)}</Tag>
                   ))}
                 </div>
               )}
@@ -99,10 +99,10 @@ const QuickHelpTooltip: React.FC<QuickHelpTooltipProps> = ({
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
               <Space>
                 <VideoCameraOutlined style={{ color: '#1890ff' }} />
-                <Text strong>{helpContent.title}</Text>
+                <Text strong style={{ color: '#000000' }}>{t(helpContent.titleKey)}</Text>
               </Space>
-              <Paragraph style={{ margin: 0, fontSize: 13 }}>
-                {helpContent.content}
+              <Paragraph style={{ margin: 0, fontSize: 13, color: '#000000' }}>
+                {t(helpContent.contentKey)}
               </Paragraph>
               {helpContent.videoUrl && (
                 <Button
@@ -126,10 +126,10 @@ const QuickHelpTooltip: React.FC<QuickHelpTooltipProps> = ({
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
               <Space>
                 <FileTextOutlined style={{ color: '#1890ff' }} />
-                <Text strong>{helpContent.title}</Text>
+                <Text strong style={{ color: '#000000' }}>{t(helpContent.titleKey)}</Text>
               </Space>
-              <Paragraph style={{ margin: 0, fontSize: 13 }}>
-                {helpContent.content}
+              <Paragraph style={{ margin: 0, fontSize: 13, color: '#000000' }}>
+                {t(helpContent.contentKey)}
               </Paragraph>
               {helpContent.linkUrl && (
                 <Button
@@ -148,7 +148,7 @@ const QuickHelpTooltip: React.FC<QuickHelpTooltipProps> = ({
         );
 
       default:
-        return <Text>{helpContent.content}</Text>;
+        return <Text>{t(helpContent.contentKey)}</Text>;
     }
   };
 
@@ -198,8 +198,16 @@ const QuickHelpTooltip: React.FC<QuickHelpTooltipProps> = ({
       trigger={trigger}
       visible={visible}
       onVisibleChange={handleVisibleChange}
-      overlayStyle={{ maxWidth: 450 }}
+      overlayStyle={{ 
+        maxWidth: 450,
+        backgroundColor: '#ffffff',
+        border: '1px solid #d9d9d9',
+        borderRadius: '6px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        color: '#000000'
+      }}
       overlayClassName={`quick-help-tooltip ${className}`}
+      color="#ffffff"
     >
       {renderChildren()}
     </Tooltip>
@@ -213,21 +221,21 @@ export const HelpContents = {
     stats: {
       id: 'dashboard-stats',
       type: 'text' as const,
-      title: 'パフォーマンス指標の見方',
-      content: 'ここでは各キャンペーンの支出、インプレッション、クリック数などの重要な指標を確認できます。CTR（クリック率）が低い場合は、広告のクリエイティブやターゲティングを見直してみましょう。',
-      tags: ['指標', 'パフォーマンス', '分析']
+      titleKey: 'help.tooltips.dashboard.stats.title',
+      contentKey: 'help.tooltips.dashboard.stats.content',
+      tagsKeys: ['help.tooltips.dashboard.stats.tag1', 'help.tooltips.dashboard.stats.tag2', 'help.tooltips.dashboard.stats.tag3']
     },
     sync: {
       id: 'dashboard-sync',
       type: 'steps' as const,
-      title: 'Meta APIからの同期',
-      content: '最新のデータを取得する方法',
-      steps: [
-        '「Meta APIから同期」ボタンをクリック',
-        '処理完了まで数秒待機',
-        '最新のパフォーマンスデータが表示されます'
+      titleKey: 'help.tooltips.dashboard.sync.title',
+      contentKey: 'help.tooltips.dashboard.sync.content',
+      stepsKeys: [
+        'help.tooltips.dashboard.sync.step1',
+        'help.tooltips.dashboard.sync.step2',
+        'help.tooltips.dashboard.sync.step3'
       ],
-      tags: ['同期', 'データ更新', 'Meta API']
+      tagsKeys: ['help.tooltips.dashboard.sync.tag1', 'help.tooltips.dashboard.sync.tag2', 'help.tooltips.dashboard.sync.tag3']
     }
   },
 
@@ -236,29 +244,29 @@ export const HelpContents = {
     name: {
       id: 'campaign-name',
       type: 'text' as const,
-      title: 'キャンペーン名の付け方',
-      content: '分かりやすいキャンペーン名を付けることで、後から管理しやすくなります。例：「新商品プロモーション_2024年1月」のように、目的と時期を含めることをお勧めします。',
-      tags: ['命名規則', '管理', 'ベストプラクティス']
+      titleKey: 'help.tooltips.campaign.name.title',
+      contentKey: 'help.tooltips.campaign.name.content',
+      tagsKeys: ['help.tooltips.campaign.name.tag1', 'help.tooltips.campaign.name.tag2', 'help.tooltips.campaign.name.tag3']
     },
     budget: {
       id: 'campaign-budget',
       type: 'text' as const,
-      title: '予算設定のコツ',
-      content: '初回は少額から始めて、パフォーマンスを確認しながら予算を調整していくことをお勧めします。日予算は最低100円から設定可能です。',
-      tags: ['予算', '最適化', '初心者向け']
+      titleKey: 'help.tooltips.campaign.budget.title',
+      contentKey: 'help.tooltips.campaign.budget.content',
+      tagsKeys: ['help.tooltips.campaign.budget.tag1', 'help.tooltips.campaign.budget.tag2', 'help.tooltips.campaign.budget.tag3']
     },
     targeting: {
       id: 'campaign-targeting',
       type: 'steps' as const,
-      title: 'ターゲティング設定',
-      content: '効果的なターゲティングの設定方法',
-      steps: [
-        '年齢と性別を設定（例：25-45歳、男女）',
-        '地域を選択（日本全国または特定地域）',
-        '興味関心を追加（関連するキーワード）',
-        'アトリビューションウィンドウを設定'
+      titleKey: 'help.tooltips.campaign.targeting.title',
+      contentKey: 'help.tooltips.campaign.targeting.content',
+      stepsKeys: [
+        'help.tooltips.campaign.targeting.step1',
+        'help.tooltips.campaign.targeting.step2',
+        'help.tooltips.campaign.targeting.step3',
+        'help.tooltips.campaign.targeting.step4'
       ],
-      tags: ['ターゲティング', 'オーディエンス', '設定']
+      tagsKeys: ['help.tooltips.campaign.targeting.tag1', 'help.tooltips.campaign.targeting.tag2', 'help.tooltips.campaign.targeting.tag3']
     }
   },
 
@@ -267,17 +275,17 @@ export const HelpContents = {
     template: {
       id: 'bulk-template',
       type: 'link' as const,
-      title: 'CSVテンプレートの使い方',
-      content: 'テンプレートをダウンロードして、必要な情報を入力してください。必須項目をすべて記入することで、エラーなく一括入稿できます。',
+      titleKey: 'help.tooltips.bulkUpload.template.title',
+      contentKey: 'help.tooltips.bulkUpload.template.content',
       linkUrl: '/help/bulk-upload-template',
-      tags: ['テンプレート', 'CSV', '一括入稿']
+      tagsKeys: ['help.tooltips.bulkUpload.template.tag1', 'help.tooltips.bulkUpload.template.tag2', 'help.tooltips.bulkUpload.template.tag3']
     },
     validation: {
       id: 'bulk-validation',
       type: 'text' as const,
-      title: 'データ検証について',
-      content: 'アップロードしたCSVファイルは自動的に検証されます。エラーがある場合は詳細を確認して修正してください。全てのエラーを解決してから実行ボタンを押してください。',
-      tags: ['検証', 'エラー', 'データ確認']
+      titleKey: 'help.tooltips.bulkUpload.validation.title',
+      contentKey: 'help.tooltips.bulkUpload.validation.content',
+      tagsKeys: ['help.tooltips.bulkUpload.validation.tag1', 'help.tooltips.bulkUpload.validation.tag2', 'help.tooltips.bulkUpload.validation.tag3']
     }
   },
 
@@ -286,15 +294,15 @@ export const HelpContents = {
     metaAccount: {
       id: 'meta-account',
       type: 'steps' as const,
-      title: 'Metaアカウントの設定',
-      content: 'Meta API連携の設定手順',
-      steps: [
-        'Facebook Developer Consoleでアプリを作成',
-        '広告管理システムのアクセストークンを取得',
-        'App ID、App Secret、アクセストークンを入力',
-        '「このアカウントを追加」ボタンで保存'
+      titleKey: 'help.tooltips.settings.metaAccount.title',
+      contentKey: 'help.tooltips.settings.metaAccount.content',
+      stepsKeys: [
+        'help.tooltips.settings.metaAccount.step1',
+        'help.tooltips.settings.metaAccount.step2',
+        'help.tooltips.settings.metaAccount.step3',
+        'help.tooltips.settings.metaAccount.step4'
       ],
-      tags: ['Meta API', '設定', '連携']
+      tagsKeys: ['help.tooltips.settings.metaAccount.tag1', 'help.tooltips.settings.metaAccount.tag2', 'help.tooltips.settings.metaAccount.tag3']
     }
   }
 };

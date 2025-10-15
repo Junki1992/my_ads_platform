@@ -20,8 +20,16 @@ export interface HelpArticle {
   category_name_en: string;
   title: string;
   title_en: string;
+  title_ko: string;
+  title_zh: string;
+  summary: string;
+  summary_en: string;
+  summary_ko: string;
+  summary_zh: string;
   content: string;
   content_en: string;
+  content_ko: string;
+  content_zh: string;
   article_type: 'text' | 'steps' | 'video' | 'link';
   tags: string[];
   video_url?: string;

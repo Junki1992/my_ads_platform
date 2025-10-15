@@ -772,6 +772,83 @@
       "settings": "Settings"
     },
     "selectCategory": "Please select a category",
+    "tooltips": {
+      "dashboard": {
+        "stats": {
+          "title": "How to Read Performance Metrics",
+          "content": "Here you can check important metrics such as spend, impressions, and clicks for each campaign. If CTR (click-through rate) is low, consider reviewing your ad creative and targeting.",
+          "tag1": "Metrics",
+          "tag2": "Performance",
+          "tag3": "Analysis"
+        },
+        "sync": {
+          "title": "Sync from Meta API",
+          "content": "How to get the latest data",
+          "step1": "Click the \"Sync from Meta API\" button",
+          "step2": "Wait a few seconds for processing to complete",
+          "step3": "Latest performance data will be displayed",
+          "tag1": "Sync",
+          "tag2": "Data Update",
+          "tag3": "Meta API"
+        }
+      },
+      "campaign": {
+        "name": {
+          "title": "How to Name Campaigns",
+          "content": "Using clear campaign names makes them easier to manage later. We recommend including purpose and timing, such as \"New Product Promotion_January 2024\".",
+          "tag1": "Naming Rules",
+          "tag2": "Management",
+          "tag3": "Best Practices"
+        },
+        "budget": {
+          "title": "Budget Setting Tips",
+          "content": "We recommend starting with a small amount and adjusting the budget while checking performance. Daily budget can be set from a minimum of ¥100.",
+          "tag1": "Budget",
+          "tag2": "Optimization",
+          "tag3": "Beginner"
+        },
+        "targeting": {
+          "title": "Targeting Settings",
+          "content": "How to set up effective targeting",
+          "step1": "Set age and gender (e.g., 25-45 years old, both genders)",
+          "step2": "Select region (all of Japan or specific regions)",
+          "step3": "Add interests (relevant keywords)",
+          "step4": "Set attribution window",
+          "tag1": "Targeting",
+          "tag2": "Audience",
+          "tag3": "Settings"
+        }
+      },
+      "bulkUpload": {
+        "template": {
+          "title": "How to Use CSV Template",
+          "content": "Download the template and enter the required information. By filling in all required fields, you can bulk upload without errors.",
+          "tag1": "Template",
+          "tag2": "CSV",
+          "tag3": "Bulk Upload"
+        },
+        "validation": {
+          "title": "About Data Validation",
+          "content": "Uploaded CSV files are automatically validated. If there are errors, check the details and fix them. Press the execute button only after resolving all errors.",
+          "tag1": "Validation",
+          "tag2": "Errors",
+          "tag3": "Data Check"
+        }
+      },
+      "settings": {
+        "metaAccount": {
+          "title": "Meta Account Settings",
+          "content": "Meta API integration setup procedure",
+          "step1": "Create an app in Facebook Developer Console",
+          "step2": "Get access token from ad management system",
+          "step3": "Enter App ID, App Secret, and access token",
+          "step4": "Save with \"Add this account\" button",
+          "tag1": "Meta API",
+          "tag2": "Settings",
+          "tag3": "Integration"
+        }
+      }
+    },
     "dashboard": {
       "title": "How to Use Dashboard",
       "content": "The dashboard shows an overview and performance metrics of all your campaigns.",

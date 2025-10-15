@@ -16,6 +16,8 @@ import {
   BellOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
+import HelpSystem from './HelpSystem';
+import InteractiveGuide from './InteractiveGuide';
 
 const { Header, Sider, Content } = Layout;
 const { Option } = Select;
@@ -32,6 +34,8 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [guideVisible, setGuideVisible] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // 画面サイズの検出
   useEffect(() => {
@@ -47,6 +51,14 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
     window.addEventListener('resize', checkScreenSize);
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
+
+  // 初回訪問時のオンボーディング表示
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding && location.pathname === '/dashboard') {
+      setShowOnboarding(true);
+    }
+  }, [location.pathname]);
 
   // デモユーザー制限のためのナビゲーション
   const handleNavigate = (path: string) => {
@@ -67,6 +79,24 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('hasSeenOnboarding', 'true');
+    setShowOnboarding(false);
+  };
+
+  const getGuideType = () => {
+    switch (location.pathname) {
+      case '/dashboard':
+        return 'dashboard';
+      case '/ad-submission':
+        return 'campaign-creation';
+      case '/bulk-upload':
+        return 'bulk-upload';
+      default:
+        return 'onboarding';
+    }
   };
 
   const menuItems = [
@@ -181,6 +211,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={(e) => e.domEvent.stopPropagation()}
+          className="sidebar-menu"
         />
         </Sider>
       )}
@@ -292,6 +323,21 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </Content>
       </Layout>
+
+      {/* ヘルプシステム */}
+      <HelpSystem />
+
+      {/* インタラクティブガイド */}
+      <InteractiveGuide
+        visible={guideVisible || showOnboarding}
+        onClose={() => {
+          setGuideVisible(false);
+          if (showOnboarding) {
+            handleOnboardingComplete();
+          }
+        }}
+        guideType={getGuideType() as any}
+      />
     </Layout>
   );
 };
