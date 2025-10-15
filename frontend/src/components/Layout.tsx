@@ -146,11 +146,6 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
 
   const userMenuItems = [
     {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: t('profile'),
-    },
-    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: t('logout'),
