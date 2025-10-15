@@ -442,7 +442,7 @@ const Settings: React.FC = () => {
         title={
           <Space>
             <SafetyOutlined />
-            <span>セキュリティ設定</span>
+            <span>{t('securitySettings')}</span>
           </Space>
         }
         style={{ marginBottom: 24 }}
@@ -453,25 +453,25 @@ const Settings: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Space>
-                    <strong>2段階認証</strong>
+                    <strong>{t('twoFactorAuthentication')}</strong>
                     {twoFactorEnabled && (
-                      <Badge status="success" text="有効" />
+                      <Badge status="success" text={t('twoFactorEnabled')} />
                     )}
                   </Space>
                   <div style={{ color: '#666', fontSize: '14px', marginTop: 8 }}>
                     {twoFactorEnabled
-                      ? 'アカウントは2段階認証で保護されています'
-                      : 'ログイン時に追加の認証コードが必要になります'}
+                      ? t('twoFactorDescription')
+                      : t('twoFactorDescriptionDisabled')}
                   </div>
                 </div>
                 <div>
                   {twoFactorEnabled ? (
                     <Button danger onClick={() => setTwoFactorDisableVisible(true)}>
-                      無効化
+                      {t('disableTwoFactor')}
                     </Button>
                   ) : (
                     <Button type="primary" onClick={() => setTwoFactorSetupVisible(true)}>
-                      有効化
+                      {t('enableTwoFactor')}
                     </Button>
                   )}
                 </div>
@@ -482,8 +482,8 @@ const Settings: React.FC = () => {
 
             <div style={{ color: '#666', fontSize: '14px' }}>
               <SafetyOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-              <strong>推奨: </strong>
-              アカウントのセキュリティを強化するため、2段階認証を有効にすることを強くお勧めします。
+              <strong>{t('recommended')}: </strong>
+              {t('securityRecommendation')}
             </div>
           </Space>
         </div>

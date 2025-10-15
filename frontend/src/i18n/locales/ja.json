@@ -753,5 +753,138 @@
   "step1CreateApp": "Facebook Developer Consoleでアプリを作成",
   "step2GetToken": "広告管理システムのアクセストークンを取得",
   "step3RegisterAccount": "下記「+ Metaアカウントを追加」ボタンでアカウント情報を登録",
-  "noteValidTokenRequired": "注意: 実際のMeta APIに接続するには有効なアクセストークンが必要です。"
+  "noteValidTokenRequired": "注意: 実際のMeta APIに接続するには有効なアクセストークンが必要です。",
+  "fetchFromTokenTitle": "アクセストークンからアカウント情報を取得",
+  "fetchFromTokenDesc": "有効なアクセストークンを入力して、利用可能な広告アカウントを取得します。",
+  "enterAccessToken": "アクセストークンを入力してください",
+  "fetchAccounts": "アカウントを取得",
+  "tokenInfo": "トークン情報",
+  "expiresAt": "有効期限",
+  "foundAccountsCount": "{{count}}個のアカウントが見つかりました",
+  "selectAccountRequired": "アカウントを選択してください",
+  "selectAccountPlaceholder": "アカウントを選択してください",
+  "securitySettings": "セキュリティ設定",
+  "twoFactorAuthentication": "2段階認証",
+  "twoFactorEnabled": "有効",
+  "twoFactorDescription": "アカウントは2段階認証で保護されています",
+  "twoFactorDescriptionDisabled": "ログイン時に追加の認証コードが必要になります",
+  "enableTwoFactor": "有効化",
+  "disableTwoFactor": "無効化",
+  "securityRecommendation": "アカウントのセキュリティを強化するため、2段階認証を有効にすることを強くお勧めします。",
+  "recommended": "推奨",
+  "help": {
+    "title": "ヘルプセンター",
+    "quickHelp": "クイックヘルプ",
+    "searchPlaceholder": "ヘルプを検索...",
+    "noResults": "検索結果が見つかりませんでした",
+    "viewDetails": "詳細を見る",
+    "close": "閉じる",
+    "steps": "操作手順",
+    "videoGuide": "動画ガイド",
+    "watchVideo": "動画を見る",
+    "quickTips": "クイックヒント",
+    "learnMore": "詳細を見る",
+    "stepByStepGuide": "ステップバイステップガイド",
+    "categories": {
+      "all": "すべて",
+      "dashboard": "ダッシュボード",
+      "campaigns": "キャンペーン",
+      "upload": "アップロード",
+      "settings": "設定"
+    },
+    "dashboard": {
+      "title": "ダッシュボードの使い方",
+      "content": "ダッシュボードでは、すべてのキャンペーンの概要とパフォーマンス指標を確認できます。",
+      "step1": "ダッシュボードにアクセスして、現在のキャンペーン状況を確認します",
+      "step2": "各キャンペーンのパフォーマンス指標（支出、インプレッション、クリック数など）を確認します",
+      "step3": "必要に応じて「Meta APIから同期」ボタンで最新データを取得します"
+    },
+    "campaign": {
+      "title": "キャンペーン作成の基本",
+      "content": "新しいキャンペーンを作成して広告を配信する方法を説明します。",
+      "step1": "キャンペーン名と目的を設定します",
+      "step2": "予算と配信期間を決定します",
+      "step3": "ターゲットオーディエンスを設定します",
+      "step4": "広告素材（画像、テキスト、URL）を準備して投稿します"
+    },
+    "bulkUpload": {
+      "title": "一括入稿の方法",
+      "content": "CSVファイルを使用して複数のキャンペーンを一度に入稿する方法です。",
+      "step1": "CSVテンプレートをダウンロードして、キャンペーンデータを入力します",
+      "step2": "ファイルをアップロードして、データの検証を行います",
+      "step3": "エラーがないことを確認して、一括入稿を実行します"
+    }
+  },
+  "guide": {
+    "title": "ガイド: {{type}}",
+    "progress": "{{current}}/{{total}}",
+    "play": "再生",
+    "pause": "一時停止",
+    "restart": "最初から",
+    "previous": "前へ",
+    "next": "次へ",
+    "complete": "完了",
+    "types": {
+      "onboarding": "オンボーディング",
+      "campaign-creation": "キャンペーン作成",
+      "bulk-upload": "一括入稿",
+      "dashboard": "ダッシュボード"
+    },
+    "onboarding": {
+      "welcome": {
+        "title": "ようこそ！",
+        "description": "Meta広告管理プラットフォームへようこそ。このガイドで基本的な操作方法を学びましょう。",
+        "action": "準備ができたら「次へ」をクリックしてください"
+      },
+      "dashboard": {
+        "title": "ダッシュボードの概要",
+        "description": "ダッシュボードでは、すべてのキャンペーンのパフォーマンスを一目で確認できます。",
+        "action": "統計カードを確認してください"
+      },
+      "navigation": {
+        "title": "ナビゲーション",
+        "description": "左側のメニューから各機能にアクセスできます。",
+        "action": "サイドバーメニューを確認してください"
+      }
+    },
+    "campaign": {
+      "basics": {
+        "title": "キャンペーン基本設定",
+        "description": "キャンペーン名と目的を設定します。",
+        "action": "キャンペーン名フィールドに入力してください"
+      },
+      "budget": {
+        "title": "予算設定",
+        "description": "キャンペーンの予算を設定します。",
+        "action": "予算金額を入力してください"
+      },
+      "targeting": {
+        "title": "ターゲティング設定",
+        "description": "広告のターゲットオーディエンスを設定します。",
+        "action": "ターゲティングセクションをクリックしてください"
+      },
+      "creative": {
+        "title": "クリエイティブ作成",
+        "description": "広告の画像とテキストを設定します。",
+        "action": "画像アップロードボタンをクリックしてください"
+      }
+    },
+    "bulkUpload": {
+      "fileSelection": {
+        "title": "ファイル選択",
+        "description": "CSVファイルを選択してアップロードします。",
+        "action": "ファイル選択ボタンをクリックしてください"
+      },
+      "validation": {
+        "title": "データ検証",
+        "description": "アップロードしたデータの検証結果を確認します。",
+        "action": "検証結果を確認してください"
+      },
+      "execution": {
+        "title": "一括入稿実行",
+        "description": "検証が完了したら一括入稿を実行します。",
+        "action": "実行ボタンをクリックしてください"
+      }
+    }
+  }
 }

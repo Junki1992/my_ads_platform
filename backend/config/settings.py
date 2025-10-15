@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'modeltranslation',
     'drf_yasg',
+    'django_filters',
     
     # カスタムアプリ
     'apps.accounts',
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     'apps.reporting',
     'apps.integrations',
     'apps.i18n',
+    'apps.help',
     'apps.demo',
     'apps.billing',
 ]
