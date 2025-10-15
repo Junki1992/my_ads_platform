@@ -750,5 +750,48 @@
   "step1CreateApp": "Create an app in Facebook Developer Console",
   "step2GetToken": "Obtain an access token from the ad management system",
   "step3RegisterAccount": "Register account information using the \"+ Add Meta Account\" button below",
-  "noteValidTokenRequired": "Note: A valid access token is required to connect to the actual Meta API."
+  "noteValidTokenRequired": "Note: A valid access token is required to connect to the actual Meta API.",
+  "help": {
+    "title": "Help Center",
+    "quickHelp": "Quick Help",
+    "searchPlaceholder": "Search help...",
+    "noResults": "No search results found",
+    "viewDetails": "View Details",
+    "close": "Close",
+    "steps": "Steps",
+    "videoGuide": "Video Guide",
+    "watchVideo": "Watch Video",
+    "quickTips": "Quick Tips",
+    "learnMore": "Learn More",
+    "categories": {
+      "all": "All",
+      "dashboard": "Dashboard",
+      "campaigns": "Campaigns",
+      "upload": "Upload",
+      "alerts": "Alerts",
+      "settings": "Settings"
+    },
+    "dashboard": {
+      "title": "How to Use Dashboard",
+      "content": "The dashboard shows an overview and performance metrics of all your campaigns.",
+      "step1": "Access the dashboard to check current campaign status",
+      "step2": "Review performance metrics (spend, impressions, clicks, etc.) for each campaign",
+      "step3": "Use the 'Sync from Meta API' button to get the latest data when needed"
+    },
+    "campaign": {
+      "title": "Campaign Creation Basics",
+      "content": "Learn how to create new campaigns and deliver ads effectively.",
+      "step1": "Set campaign name and objective",
+      "step2": "Determine budget and delivery period",
+      "step3": "Configure target audience settings",
+      "step4": "Prepare ad materials (images, text, URLs) and submit"
+    },
+    "bulkUpload": {
+      "title": "How to Bulk Upload",
+      "content": "Submit multiple campaigns at once using CSV files.",
+      "step1": "Download CSV template and enter campaign data",
+      "step2": "Upload file and validate the data",
+      "step3": "Confirm no errors and execute bulk upload"
+    }
+  }
 }

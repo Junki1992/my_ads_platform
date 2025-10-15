@@ -105,6 +105,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
     { key: 'dashboard', label: t('help.categories.dashboard') },
     { key: 'campaigns', label: t('help.categories.campaigns') },
     { key: 'upload', label: t('help.categories.upload') },
+    { key: 'alerts', label: t('help.categories.alerts') },
     { key: 'settings', label: t('help.categories.settings') }
   ];
 
