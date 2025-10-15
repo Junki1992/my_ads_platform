@@ -110,9 +110,15 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
 
   const loadHelpContent = useCallback(async () => {
     try {
+      // カテゴリをpage_contextにマッピング
+      let pageContext = selectedCategory !== 'all' ? selectedCategory : undefined;
+      if (selectedCategory === 'upload') {
+        pageContext = 'bulk-upload';
+      }
+      
       // 記事を取得
       const articles = await helpService.getArticles({
-        page_context: selectedCategory !== 'all' ? selectedCategory : undefined
+        page_context: pageContext
       });
       
       // 配列でない場合はフォールバックを使用
