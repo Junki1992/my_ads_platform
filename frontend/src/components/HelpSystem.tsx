@@ -55,6 +55,8 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
         category_name_en: 'Dashboard',
         title: isJapanese ? 'ダッシュボードの使い方' : 'How to use Dashboard',
         title_en: 'How to use Dashboard',
+        summary: isJapanese ? 'ダッシュボードでは、広告のパフォーマンスを一目で確認できます。' : 'The dashboard allows you to view your ad performance at a glance.',
+        summary_en: 'The dashboard allows you to view your ad performance at a glance.',
         content: isJapanese ? 'ダッシュボードでは、広告のパフォーマンスを一目で確認できます。' : 'The dashboard allows you to view your ad performance at a glance.',
         content_en: 'The dashboard allows you to view your ad performance at a glance.',
         article_type: 'text',
@@ -74,6 +76,8 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
         category_name_en: 'Settings',
         title: isJapanese ? 'アカウント設定の変更方法' : 'How to change account settings',
         title_en: 'How to change account settings',
+        summary: isJapanese ? 'アカウント設定では、会社情報や言語設定を変更できます。' : 'You can change company information and language settings in account settings.',
+        summary_en: 'You can change company information and language settings in account settings.',
         content: isJapanese ? 'アカウント設定では、会社情報や言語設定を変更できます。' : 'You can change company information and language settings in account settings.',
         content_en: 'You can change company information and language settings in account settings.',
         article_type: 'steps',
@@ -159,7 +163,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
 
   const renderHelpContent = (item: HelpArticle): React.ReactElement => {
     const title = i18n.language === 'ja' ? item.title : item.title_en;
-    const content = i18n.language === 'ja' ? item.content : item.content_en;
+    const summary = i18n.language === 'ja' ? item.summary : item.summary_en;
     
     return (
       <Card
@@ -200,7 +204,7 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
               }}>{children}</code>
             }}
           >
-            {content}
+            {summary}
           </ReactMarkdown>
         </div>
         <div>
@@ -346,7 +350,8 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
           <Button
             type="primary"
             shape="circle"
-            icon={<QuestionCircleOutlined />}
+            size="large"
+            icon={<QuestionCircleOutlined style={{ fontSize: '18px' }} />}
             onClick={() => {
               setHelpVisible(true);
               if (helpContent.length === 0) {
@@ -358,7 +363,9 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
               bottom: 24,
               right: 24,
               zIndex: 1000,
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              width: '56px',
+              height: '56px'
             }}
           />
         </Tooltip>
