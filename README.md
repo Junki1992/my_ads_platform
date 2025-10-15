@@ -120,12 +120,9 @@ npm start
 - `POST /api/accounts/users/disable_2fa/` - 2FA無効化
 - `GET /api/accounts/users/get_2fa_status/` - 2FA状態確認
 
-### 開発環境の認証情報
+### 開発環境での認証
 
-```
-Email: admin@example.com
-Password: admin123
-```
+初回セットアップ後は、`python manage.py createsuperuser`で作成したアカウントでログインしてください。
 
 ## 開発
 
