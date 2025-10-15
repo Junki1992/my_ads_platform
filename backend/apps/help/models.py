@@ -42,6 +42,8 @@ class HelpArticle(models.Model):
     )
     title = models.CharField(max_length=200, verbose_name="タイトル")
     title_en = models.CharField(max_length=200, verbose_name="タイトル（英語）")
+    summary = models.TextField(verbose_name="要約", help_text="一覧表示用の短い説明文", default="")
+    summary_en = models.TextField(verbose_name="要約（英語）", help_text="一覧表示用の短い説明文（英語）", default="")
     content = models.TextField(verbose_name="内容")
     content_en = models.TextField(verbose_name="内容（英語）")
     article_type = models.CharField(
