@@ -10,8 +10,12 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 
                   'company', 'phone', 'language', 'timezone', 'is_demo_user',
+                  'meta_app_id', 'meta_app_secret',
                   'date_joined', 'last_login']
         read_only_fields = ['id', 'date_joined', 'last_login']
+        extra_kwargs = {
+            'meta_app_secret': {'write_only': True}  # セキュリティのため読み取り時は返さない
+        }
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):

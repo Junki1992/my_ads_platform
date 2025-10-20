@@ -451,6 +451,327 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 'error': f'Validation failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['get'])
+    def oauth_authorize(self, request):
+        """Meta OAuth認証URLを生成（開発用）"""
+        from django.conf import settings
+        import secrets
+        import jwt
+        from datetime import datetime, timedelta
+        
+        # ランダムなstateパラメータを生成（CSRF攻撃防止）
+        state = secrets.token_urlsafe(32)
+        
+        # JWTトークンでstateをエンコード（セッションの代わり）
+        jwt_secret = getattr(settings, 'SECRET_KEY', 'fallback-secret')
+        payload = {
+            'state': state,
+            'user_id': request.user.id,
+            'exp': datetime.utcnow() + timedelta(minutes=10)  # 10分で有効期限切れ
+        }
+        encoded_state = jwt.encode(payload, jwt_secret, algorithm='HS256')
+        
+        # ユーザーのMeta App ID/Secretを取得
+        app_id = request.user.meta_app_id
+        app_secret = request.user.meta_app_secret
+        
+        if not app_id or not app_secret:
+            # ユーザーがApp ID/Secretを設定していない場合
+            logger.info(f"User has not configured Meta App ID/Secret: {request.user.email}")
+            return Response({
+                'error': 'Meta App ID/Secretが設定されていません。設定画面でApp IDとApp Secretを設定してください。',
+                'requires_setup': True
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/meta-accounts/oauth_callback/"
+        scope = 'ads_management,ads_read,business_management'
+        
+        auth_url = (
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
+            f"client_id={app_id}&"
+            f"redirect_uri={redirect_uri}&"
+            f"scope={scope}&"
+            f"state={encoded_state}&"
+            f"response_type=code"
+        )
+        
+        logger.info(f"Generated OAuth URL for user: {request.user.email}")
+        return Response({
+            'auth_url': auth_url
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['get'])
+    def oauth_authorize_account(self, request, pk=None):
+        """特定のMetaアカウント用OAuth認証URLを生成"""
+        from django.conf import settings
+        import secrets
+        import jwt
+        from datetime import datetime, timedelta
+        
+        # アカウントの存在確認
+        try:
+            account = self.get_object()
+        except MetaAccount.DoesNotExist:
+            return Response({
+                'error': 'Account not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # ランダムなstateパラメータを生成（CSRF攻撃防止）
+        state = secrets.token_urlsafe(32)
+        
+        # JWTトークンでstateをエンコード（セッションの代わり）
+        jwt_secret = getattr(settings, 'SECRET_KEY', 'fallback-secret')
+        payload = {
+            'state': state,
+            'user_id': request.user.id,
+            'target_account_id': account.id,  # 対象アカウントIDを保存
+            'exp': datetime.utcnow() + timedelta(minutes=10)  # 10分で有効期限切れ
+        }
+        encoded_state = jwt.encode(payload, jwt_secret, algorithm='HS256')
+        
+        # Meta OAuth認証URLを構築
+        app_id = getattr(settings, 'META_APP_ID', None)
+        if not app_id:
+            return Response({
+                'error': 'META_APP_ID is not configured'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/meta-accounts/oauth_callback/"
+        scope = 'ads_management,ads_read,business_management'
+        
+        auth_url = (
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
+            f"client_id={app_id}&"
+            f"redirect_uri={redirect_uri}&"
+            f"scope={scope}&"
+            f"state={encoded_state}&"
+            f"response_type=code"
+        )
+        
+        logger.info(f"Generated OAuth URL for specific account: {account.account_id} (user: {request.user.email})")
+        return Response({
+            'auth_url': auth_url,
+            'account_id': account.account_id,
+            'account_name': account.account_name
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['get'])
+    def oauth_callback(self, request):
+        """Meta OAuth認証コールバック処理"""
+        from django.conf import settings
+        from django.shortcuts import redirect
+        
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        error = request.GET.get('error')
+        
+        # エラーハンドリング
+        if error:
+            logger.error(f"OAuth error: {error}")
+            return redirect(f"/settings?error=oauth_error&message={error}")
+        
+        # stateパラメータの検証（JWTトークンから復号化）
+        try:
+            jwt_secret = getattr(settings, 'SECRET_KEY', 'fallback-secret')
+            decoded_payload = jwt.decode(state, jwt_secret, algorithms=['HS256'])
+            user_id = decoded_payload.get('user_id')
+            target_account_id = decoded_payload.get('target_account_id')
+            
+            # ユーザーIDの検証
+            if user_id != request.user.id:
+                logger.error("Invalid user ID in OAuth state")
+                return redirect("/settings?error=invalid_user")
+                
+        except jwt.ExpiredSignatureError:
+            logger.error("OAuth state token expired")
+            return redirect("/settings?error=expired_state")
+        except jwt.InvalidTokenError:
+            logger.error("Invalid OAuth state token")
+            return redirect("/settings?error=invalid_state")
+        
+        if not code:
+            logger.error("No authorization code received")
+            return redirect("/settings?error=no_code")
+        
+        try:
+            # ユーザーのMeta App ID/Secretを取得
+            app_id = request.user.meta_app_id
+            app_secret = request.user.meta_app_secret
+            
+            if not app_id or not app_secret:
+                logger.error(f"User has not configured Meta App ID/Secret: {request.user.email}")
+                return redirect("/settings?error=config_error")
+            
+            redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/meta-accounts/oauth_callback/"
+            
+            # アクセストークンを取得
+            token_url = 'https://graph.facebook.com/v18.0/oauth/access_token'
+            token_params = {
+                'client_id': app_id,
+                'client_secret': app_secret,
+                'redirect_uri': redirect_uri,
+                'code': code
+            }
+            
+            token_response = requests.get(token_url, params=token_params)
+            token_data = token_response.json()
+            
+            if 'access_token' not in token_data:
+                error_message = token_data.get('error', {}).get('message', 'Token exchange failed')
+                logger.error(f"Token exchange failed: {error_message}")
+                return redirect(f"/settings?error=token_exchange_failed&message={error_message}")
+            
+            access_token = token_data['access_token']
+            
+            # 長期トークンに変換
+            long_token_url = 'https://graph.facebook.com/v18.0/oauth/access_token'
+            long_token_params = {
+                'grant_type': 'fb_exchange_token',
+                'client_id': app_id,
+                'client_secret': app_secret,
+                'fb_exchange_token': access_token
+            }
+            
+            long_token_response = requests.get(long_token_url, params=long_token_params)
+            long_token_data = long_token_response.json()
+            
+            if 'access_token' not in long_token_data:
+                error_message = long_token_data.get('error', {}).get('message', 'Long token exchange failed')
+                logger.error(f"Long token exchange failed: {error_message}")
+                return redirect(f"/settings?error=long_token_failed&message={error_message}")
+            
+            long_access_token = long_token_data['access_token']
+            
+            # ユーザー情報を取得
+            user_url = 'https://graph.facebook.com/v18.0/me'
+            user_params = {
+                'access_token': long_access_token,
+                'fields': 'id,name'
+            }
+            
+            user_response = requests.get(user_url, params=user_params)
+            user_data = user_response.json()
+            
+            if 'id' not in user_data:
+                logger.error("Failed to get user info from Meta")
+                return redirect("/settings?error=user_info_failed")
+            
+            # 広告アカウント一覧を取得
+            accounts_url = 'https://graph.facebook.com/v18.0/me/adaccounts'
+            accounts_params = {
+                'access_token': long_access_token,
+                'fields': 'id,name,account_id,currency,timezone_name,account_status'
+            }
+            
+            accounts_response = requests.get(accounts_url, params=accounts_params)
+            accounts_data = accounts_response.json()
+            
+            # 特定のアカウントを更新するか、全アカウントを保存するかを判定
+            saved_accounts = []
+            
+            if target_account_id:
+                # 特定のアカウントのトークンを更新
+                try:
+                    target_account = MetaAccount.objects.get(
+                        id=target_account_id,
+                        user=request.user
+                    )
+                    target_account.access_token = long_access_token
+                    target_account.is_active = True
+                    target_account.save()
+                    saved_accounts.append(target_account)
+                    
+                    logger.info(f"Updated token for specific account: {target_account.account_id}")
+                except MetaAccount.DoesNotExist:
+                    logger.error(f"Target account not found: {target_account_id}")
+                    return redirect("/settings?error=account_not_found")
+            else:
+                # 全アカウントを保存（従来の動作）
+                if 'data' in accounts_data:
+                    for account in accounts_data['data']:
+                        # 既存のアカウントかチェック
+                        existing_account = MetaAccount.objects.filter(
+                            user=request.user,
+                            account_id=account.get('account_id')
+                        ).first()
+                        
+                        if existing_account:
+                            # 既存アカウントのトークンを更新
+                            existing_account.access_token = long_access_token
+                            existing_account.account_name = account.get('name', '')
+                            existing_account.is_active = True
+                            existing_account.save()
+                            saved_accounts.append(existing_account)
+                        else:
+                            # 新しいアカウントを作成
+                            new_account = MetaAccount.objects.create(
+                                user=request.user,
+                                account_id=account.get('account_id'),
+                                account_name=account.get('name', ''),
+                                access_token=long_access_token,
+                                is_active=True
+                            )
+                            saved_accounts.append(new_account)
+            
+            # JWTトークンは自動的に有効期限切れになるため、削除処理は不要
+            
+            logger.info(f"OAuth authentication successful for user: {request.user.email}, saved {len(saved_accounts)} accounts")
+            
+            # 成功ページにリダイレクト
+            if target_account_id:
+                return redirect(f"/settings?success=oauth_account_updated&account_id={saved_accounts[0].account_id if saved_accounts else ''}")
+            else:
+                return redirect(f"/settings?success=oauth_success&accounts={len(saved_accounts)}")
+                
+        except Exception as e:
+            logger.error(f"OAuth callback error: {str(e)}")
+            return redirect(f"/settings?error=callback_error&message={str(e)}")
+    
+    @action(detail=False, methods=['post'])
+    def create_demo_accounts(self, request):
+        """開発用：ダミーのMetaアカウントを作成"""
+        import random
+        import string
+        
+        # 既存のアカウント数をチェック
+        existing_count = MetaAccount.objects.filter(user=request.user).count()
+        if existing_count > 0:
+            return Response({
+                'error': '既にアカウントが存在します。削除してから再試行してください。'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ダミーアカウントを作成
+        demo_accounts = [
+            {
+                'account_id': f"act_{''.join(random.choices(string.digits, k=10))}",
+                'account_name': 'テスト広告アカウント 1',
+                'access_token': f"EAA{''.join(random.choices(string.ascii_letters + string.digits, k=200))}"
+            },
+            {
+                'account_id': f"act_{''.join(random.choices(string.digits, k=10))}",
+                'account_name': 'テスト広告アカウント 2',
+                'access_token': f"EAA{''.join(random.choices(string.ascii_letters + string.digits, k=200))}"
+            }
+        ]
+        
+        created_accounts = []
+        for account_data in demo_accounts:
+            account = MetaAccount.objects.create(
+                user=request.user,
+                account_id=account_data['account_id'],
+                account_name=account_data['account_name'],
+                access_token=account_data['access_token'],
+                is_active=True
+            )
+            created_accounts.append(account)
+        
+        logger.info(f"Created {len(created_accounts)} demo accounts for user: {request.user.email}")
+        
+        return Response({
+            'message': f'{len(created_accounts)}個のダミーアカウントを作成しました',
+            'accounts': len(created_accounts)
+        }, status=status.HTTP_201_CREATED)
+    
     @action(detail=False, methods=['post'])
     def fetch_accounts(self, request):
         """アクセストークンから広告アカウント一覧と有効期限を取得"""

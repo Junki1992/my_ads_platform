@@ -255,6 +255,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'django.utils.autoreload': {
+            'handlers': ['file'],  # コンソールには出さない
+            'level': 'INFO',
+            'propagate': False,
+        },
         'apps': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG' if DEBUG else 'INFO',

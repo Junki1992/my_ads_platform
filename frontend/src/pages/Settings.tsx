@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Popconfirm, Modal, Alert, Tabs, Badge } from 'antd';
+import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Popconfirm, Modal, Alert, Tabs, Badge, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
@@ -18,6 +18,8 @@ interface SettingsData {
   language: string;
   timezone: string;
   notifications: boolean;
+  meta_app_id?: string;
+  meta_app_secret?: string;
 }
 
 const Settings: React.FC = () => {
@@ -47,6 +49,11 @@ const Settings: React.FC = () => {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorSetupVisible, setTwoFactorSetupVisible] = useState(false);
   const [twoFactorDisableVisible, setTwoFactorDisableVisible] = useState(false);
+  
+  // Meta API設定モーダル
+  const [metaApiModalVisible, setMetaApiModalVisible] = useState(false);
+  const [metaApiForm] = Form.useForm();
+  const [savingMetaApi, setSavingMetaApi] = useState(false);
 
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -85,6 +92,25 @@ const Settings: React.FC = () => {
     loadUserSettings();
     loadMetaAccounts();
     loadTwoFactorStatus();
+    
+    // URLパラメータからOAuth結果をチェック
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const accounts = urlParams.get('accounts');
+    const message = urlParams.get('message');
+    
+    if (success === 'oauth_success') {
+      // OAuth認証成功
+      loadMetaAccounts(); // アカウント一覧を再読み込み
+      // URLパラメータをクリア
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (error) {
+      // OAuth認証エラー
+      console.error('OAuth error:', error, message);
+      // URLパラメータをクリア
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, [form, i18n.language]);
   
   const loadTwoFactorStatus = async () => {
@@ -184,6 +210,73 @@ const Settings: React.FC = () => {
       loadMetaAccounts();
     } catch (error) {
       console.error('Failed to delete Meta account:', error);
+    }
+  };
+
+
+  const handleOAuthLoginForAccount = async (accountId: number) => {
+    try {
+      const response = await metaAccountService.getOAuthUrlForAccount(accountId);
+      // Meta公式認証ページにリダイレクト
+      window.location.href = response.auth_url;
+    } catch (error) {
+      console.error('Failed to get OAuth URL for account:', error);
+    }
+  };
+
+  const handleCreateDemoAccounts = async () => {
+    try {
+      const response = await metaAccountService.createDemoAccounts();
+      console.log('Demo accounts created:', response.message);
+      loadMetaAccounts(); // アカウント一覧を再読み込み
+    } catch (error) {
+      console.error('Failed to create demo accounts:', error);
+    }
+  };
+
+  const handleSaveMetaApi = async (values: any) => {
+    setSavingMetaApi(true);
+    try {
+      // ユーザー情報を更新
+      await api.patch('/accounts/users/me/', {
+        meta_app_id: values.meta_app_id,
+        meta_app_secret: values.meta_app_secret,
+      });
+      
+      message.success('Meta API設定を保存しました');
+      setMetaApiModalVisible(false);
+      metaApiForm.resetFields();
+      
+      // OAuth認証を開始
+      const response = await metaAccountService.getOAuthUrl();
+      window.location.href = response.auth_url;
+    } catch (error) {
+      console.error('Failed to save Meta API settings:', error);
+      message.error('Meta API設定の保存に失敗しました');
+    } finally {
+      setSavingMetaApi(false);
+    }
+  };
+
+  const handleOAuthLogin = async () => {
+    try {
+      const response = await metaAccountService.getOAuthUrl();
+      
+      // App ID/Secretが設定されていない場合のエラーハンドリング
+      if ((response as any).requires_setup) {
+        // モーダルを開く
+        setMetaApiModalVisible(true);
+        return;
+      }
+      
+      // Meta公式認証ページにリダイレクト
+      window.location.href = response.auth_url;
+    } catch (error: any) {
+      console.error('Failed to get OAuth URL:', error);
+      if (error.response?.data?.requires_setup) {
+        // モーダルを開く
+        setMetaApiModalVisible(true);
+      }
     }
   };
 
@@ -301,6 +394,14 @@ const Settings: React.FC = () => {
       key: 'action',
       render: (_: any, record: MetaAccount) => (
         <Space>
+          <Button
+            type="link"
+            icon={<CheckCircleOutlined />}
+            onClick={() => handleOAuthLoginForAccount(record.id)}
+            style={{ color: '#1877f2' }}
+          >
+            認証更新
+          </Button>
           <Button
             type="link"
             icon={<EditOutlined />}
@@ -513,6 +614,22 @@ const Settings: React.FC = () => {
         <div style={{ marginBottom: 16, textAlign: 'right' }}>
           <Space wrap>
             <Button 
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={handleOAuthLogin}
+              style={{ backgroundColor: '#1877f2', borderColor: '#1877f2' }}
+            >
+              <span className="button-text">Meta公式認証で自動取得</span>
+            </Button>
+            <Button 
+              type="default"
+              icon={<PlusOutlined />}
+              onClick={handleCreateDemoAccounts}
+              style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: 'white' }}
+            >
+              <span className="button-text">開発用：ダミーアカウント作成</span>
+            </Button>
+            <Button 
               icon={<SwapOutlined />}
               onClick={() => {
                 setTokenExchangeModalVisible(true);
@@ -523,7 +640,6 @@ const Settings: React.FC = () => {
               <span className="button-text">{t('tokenGeneration')}</span>
             </Button>
             <Button 
-              type="primary" 
               icon={<PlusOutlined />}
               onClick={() => {
                 setEditingAccount(null);
@@ -804,6 +920,74 @@ const Settings: React.FC = () => {
           loadTwoFactorStatus();
         }}
       />
+
+      {/* Meta API設定モーダル */}
+      <Modal
+        title="Meta API設定"
+        open={metaApiModalVisible}
+        onCancel={() => {
+          setMetaApiModalVisible(false);
+          metaApiForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Alert
+          message="Meta Developersアプリの作成"
+          description={
+            <div>
+              <p>各ユーザーが自分のMeta Developersアプリを作成し、App IDとApp Secretを設定することで、安全に自分のMetaアカウントを管理できます。</p>
+              <ol style={{ marginTop: 12, paddingLeft: 20 }}>
+                <li>Meta for Developers (https://developers.facebook.com/) にアクセス</li>
+                <li>「アプリを作成」をクリック</li>
+                <li>アプリタイプ：「ビジネス」を選択</li>
+                <li>アプリ設定 → 基本設定でApp IDとApp Secretを取得</li>
+                <li>製品 → Facebookログインを追加</li>
+                <li>有効なOAuthリダイレクトURIに追加：<code>http://localhost:8000/api/accounts/meta-accounts/oauth_callback/</code></li>
+              </ol>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 24 }}
+        />
+
+        <Form
+          form={metaApiForm}
+          layout="vertical"
+          onFinish={handleSaveMetaApi}
+        >
+          <Form.Item
+            name="meta_app_id"
+            label="Meta App ID"
+            rules={[{ required: true, message: 'Meta App IDを入力してください' }]}
+          >
+            <Input placeholder="Meta App IDを入力" />
+          </Form.Item>
+
+          <Form.Item
+            name="meta_app_secret"
+            label="Meta App Secret"
+            rules={[{ required: true, message: 'Meta App Secretを入力してください' }]}
+          >
+            <Input.Password placeholder="Meta App Secretを入力" />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => {
+                setMetaApiModalVisible(false);
+                metaApiForm.resetFields();
+              }}>
+                キャンセル
+              </Button>
+              <Button type="primary" htmlType="submit" loading={savingMetaApi}>
+                保存して認証開始
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

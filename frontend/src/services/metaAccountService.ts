@@ -83,6 +83,24 @@ class MetaAccountService {
     });
     return response.data;
   }
+
+  // OAuth認証URL取得
+  async getOAuthUrl(): Promise<{ auth_url: string }> {
+    const response = await api.get('/accounts/meta-accounts/oauth_authorize/');
+    return response.data;
+  }
+
+  // 特定アカウント用OAuth認証URL取得
+  async getOAuthUrlForAccount(accountId: number): Promise<{ auth_url: string; account_id: string; account_name: string }> {
+    const response = await api.get(`/accounts/meta-accounts/${accountId}/oauth_authorize_account/`);
+    return response.data;
+  }
+
+  // 開発用：ダミーアカウント作成
+  async createDemoAccounts(): Promise<{ message: string; accounts: number }> {
+    const response = await api.post('/accounts/meta-accounts/create_demo_accounts/');
+    return response.data;
+  }
 }
 
 const metaAccountService = new MetaAccountService();

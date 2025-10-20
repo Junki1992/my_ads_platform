@@ -224,20 +224,20 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
         }}>
           <ReactMarkdown
             components={{
-              h1: ({children}) => <Title level={4}>{children}</Title>,
-              h2: ({children}) => <Title level={5}>{children}</Title>,
-              h3: ({children}) => <Title level={5}>{children}</Title>,
-              p: ({children}) => <Paragraph style={{ marginBottom: '8px' }}>{children}</Paragraph>,
-              ul: ({children}) => <ul style={{ marginLeft: '20px', marginBottom: '12px' }}>{children}</ul>,
-              ol: ({children}) => <ol style={{ marginLeft: '20px', marginBottom: '12px' }}>{children}</ol>,
-              li: ({children}) => <li style={{ marginBottom: '4px' }}>{children}</li>,
-              strong: ({children}) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
-              code: ({children}) => <code style={{ 
+              h1: (props: any) => <Title level={4}>{props.children}</Title>,
+              h2: (props: any) => <Title level={5}>{props.children}</Title>,
+              h3: (props: any) => <Title level={5}>{props.children}</Title>,
+              p: (props: any) => <Paragraph style={{ marginBottom: '8px' }}>{props.children}</Paragraph>,
+              ul: (props: any) => <ul style={{ marginLeft: '20px', marginBottom: '12px' }}>{props.children}</ul>,
+              ol: (props: any) => <ol style={{ marginLeft: '20px', marginBottom: '12px' }}>{props.children}</ol>,
+              li: (props: any) => <li style={{ marginBottom: '4px' }}>{props.children}</li>,
+              strong: (props: any) => <strong style={{ fontWeight: 'bold' }}>{props.children}</strong>,
+              code: (props: any) => <code style={{ 
                 backgroundColor: '#f5f5f5', 
                 padding: '2px 4px', 
                 borderRadius: '3px',
                 fontFamily: 'monospace'
-              }}>{children}</code>
+              }}>{props.children}</code>
             }}
           >
             {summary}
@@ -349,28 +349,28 @@ const HelpSystem: React.FC<HelpSystemProps> = ({
           }}>
             <ReactMarkdown
               components={{
-                h1: ({children}) => <Title level={3}>{children}</Title>,
-                h2: ({children}) => <Title level={4}>{children}</Title>,
-                h3: ({children}) => <Title level={5}>{children}</Title>,
-                p: ({children}) => <Paragraph style={{ marginBottom: '12px' }}>{children}</Paragraph>,
-                ul: ({children}) => <ul style={{ marginLeft: '20px', marginBottom: '16px' }}>{children}</ul>,
-                ol: ({children}) => <ol style={{ marginLeft: '20px', marginBottom: '16px' }}>{children}</ol>,
-                li: ({children}) => <li style={{ marginBottom: '6px' }}>{children}</li>,
-                strong: ({children}) => <strong style={{ fontWeight: 'bold', color: '#1890ff' }}>{children}</strong>,
-                code: ({children}) => <code style={{ 
+                h1: (props: any) => <Title level={3}>{props.children}</Title>,
+                h2: (props: any) => <Title level={4}>{props.children}</Title>,
+                h3: (props: any) => <Title level={5}>{props.children}</Title>,
+                p: (props: any) => <Paragraph style={{ marginBottom: '12px' }}>{props.children}</Paragraph>,
+                ul: (props: any) => <ul style={{ marginLeft: '20px', marginBottom: '16px' }}>{props.children}</ul>,
+                ol: (props: any) => <ol style={{ marginLeft: '20px', marginBottom: '16px' }}>{props.children}</ol>,
+                li: (props: any) => <li style={{ marginBottom: '6px' }}>{props.children}</li>,
+                strong: (props: any) => <strong style={{ fontWeight: 'bold', color: '#1890ff' }}>{props.children}</strong>,
+                code: (props: any) => <code style={{ 
                   backgroundColor: '#f0f0f0', 
                   padding: '4px 8px', 
                   borderRadius: '4px',
                   fontFamily: 'monospace',
                   fontSize: '13px'
-                }}>{children}</code>,
-                blockquote: ({children}) => <blockquote style={{ 
+                }}>{props.children}</code>,
+                blockquote: (props: any) => <blockquote style={{ 
                   borderLeft: '4px solid #1890ff', 
                   paddingLeft: '16px', 
                   margin: '16px 0',
                   backgroundColor: '#f6f8fa',
                   padding: '12px 16px'
-                }}>{children}</blockquote>
+                }}>{props.children}</blockquote>
               }}
             >
               {modalContent}

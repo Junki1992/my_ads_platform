@@ -29,6 +29,8 @@ services:
       - DEBUG=True
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
 
   frontend:
     build: ./frontend
@@ -53,6 +55,8 @@ services:
       - DEBUG=True
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
 
 volumes:
   postgres_data:
