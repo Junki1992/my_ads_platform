@@ -453,7 +453,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def oauth_authorize(self, request):
-        """Meta OAuth認証URLを生成（開発用）"""
+        """Meta OAuth認証URLを生成"""
         from django.conf import settings
         import secrets
         import jwt
@@ -471,17 +471,14 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         }
         encoded_state = jwt.encode(payload, jwt_secret, algorithm='HS256')
         
-        # ユーザーのMeta App ID/Secretを取得
-        app_id = request.user.meta_app_id
-        app_secret = request.user.meta_app_secret
+        # プラットフォーム統一のMeta App IDを使用
+        app_id = getattr(settings, 'META_APP_ID', None)
         
-        if not app_id or not app_secret:
-            # ユーザーがApp ID/Secretを設定していない場合
-            logger.info(f"User has not configured Meta App ID/Secret: {request.user.email}")
+        if not app_id:
+            logger.error("META_APP_ID is not configured in settings")
             return Response({
-                'error': 'Meta App ID/Secretが設定されていません。設定画面でApp IDとApp Secretを設定してください。',
-                'requires_setup': True
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'error': 'Meta App IDが設定されていません。管理者に連絡してください。'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/meta-accounts/oauth_callback/"
         scope = 'ads_management,ads_read,business_management'
@@ -555,11 +552,13 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             'account_name': account.account_name
         }, status=status.HTTP_200_OK)
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[])
     def oauth_callback(self, request):
         """Meta OAuth認証コールバック処理"""
         from django.conf import settings
         from django.shortcuts import redirect
+        from rest_framework.permissions import AllowAny
+        import jwt
         
         code = request.GET.get('code')
         state = request.GET.get('state')
@@ -568,7 +567,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         # エラーハンドリング
         if error:
             logger.error(f"OAuth error: {error}")
-            return redirect(f"/settings?error=oauth_error&message={error}")
+            return redirect(f"http://localhost:3000/settings?error=oauth_error&message={error}")
         
         # stateパラメータの検証（JWTトークンから復号化）
         try:
@@ -577,30 +576,33 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             user_id = decoded_payload.get('user_id')
             target_account_id = decoded_payload.get('target_account_id')
             
-            # ユーザーIDの検証
-            if user_id != request.user.id:
-                logger.error("Invalid user ID in OAuth state")
-                return redirect("/settings?error=invalid_user")
+            # JWTからユーザーを取得
+            from .models import User
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                logger.error(f"User not found: {user_id}")
+                return redirect("http://localhost:3000/settings?error=user_not_found")
                 
         except jwt.ExpiredSignatureError:
             logger.error("OAuth state token expired")
-            return redirect("/settings?error=expired_state")
+            return redirect("http://localhost:3000/settings?error=expired_state")
         except jwt.InvalidTokenError:
             logger.error("Invalid OAuth state token")
-            return redirect("/settings?error=invalid_state")
+            return redirect("http://localhost:3000/settings?error=invalid_state")
         
         if not code:
             logger.error("No authorization code received")
-            return redirect("/settings?error=no_code")
+            return redirect("http://localhost:3000/settings?error=no_code")
         
         try:
-            # ユーザーのMeta App ID/Secretを取得
-            app_id = request.user.meta_app_id
-            app_secret = request.user.meta_app_secret
+            # プラットフォーム統一のMeta App ID/Secretを使用
+            app_id = getattr(settings, 'META_APP_ID', None)
+            app_secret = getattr(settings, 'META_APP_SECRET', None)
             
             if not app_id or not app_secret:
-                logger.error(f"User has not configured Meta App ID/Secret: {request.user.email}")
-                return redirect("/settings?error=config_error")
+                logger.error("META_APP_ID or META_APP_SECRET is not configured in settings")
+                return redirect("http://localhost:3000/settings?error=config_error")
             
             redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/meta-accounts/oauth_callback/"
             
@@ -619,7 +621,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             if 'access_token' not in token_data:
                 error_message = token_data.get('error', {}).get('message', 'Token exchange failed')
                 logger.error(f"Token exchange failed: {error_message}")
-                return redirect(f"/settings?error=token_exchange_failed&message={error_message}")
+                return redirect(f"http://localhost:3000/settings?error=token_exchange_failed&message={error_message}")
             
             access_token = token_data['access_token']
             
@@ -638,7 +640,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             if 'access_token' not in long_token_data:
                 error_message = long_token_data.get('error', {}).get('message', 'Long token exchange failed')
                 logger.error(f"Long token exchange failed: {error_message}")
-                return redirect(f"/settings?error=long_token_failed&message={error_message}")
+                return redirect(f"http://localhost:3000/settings?error=long_token_failed&message={error_message}")
             
             long_access_token = long_token_data['access_token']
             
@@ -654,7 +656,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             
             if 'id' not in user_data:
                 logger.error("Failed to get user info from Meta")
-                return redirect("/settings?error=user_info_failed")
+                return redirect("http://localhost:3000/settings?error=user_info_failed")
             
             # 広告アカウント一覧を取得
             accounts_url = 'https://graph.facebook.com/v18.0/me/adaccounts'
@@ -674,7 +676,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 try:
                     target_account = MetaAccount.objects.get(
                         id=target_account_id,
-                        user=request.user
+                        user=user
                     )
                     target_account.access_token = long_access_token
                     target_account.is_active = True
@@ -684,14 +686,14 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                     logger.info(f"Updated token for specific account: {target_account.account_id}")
                 except MetaAccount.DoesNotExist:
                     logger.error(f"Target account not found: {target_account_id}")
-                    return redirect("/settings?error=account_not_found")
+                    return redirect("http://localhost:3000/settings?error=account_not_found")
             else:
                 # 全アカウントを保存（従来の動作）
                 if 'data' in accounts_data:
                     for account in accounts_data['data']:
                         # 既存のアカウントかチェック
                         existing_account = MetaAccount.objects.filter(
-                            user=request.user,
+                            user=user,
                             account_id=account.get('account_id')
                         ).first()
                         
@@ -705,7 +707,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                         else:
                             # 新しいアカウントを作成
                             new_account = MetaAccount.objects.create(
-                                user=request.user,
+                                user=user,
                                 account_id=account.get('account_id'),
                                 account_name=account.get('name', ''),
                                 access_token=long_access_token,
@@ -715,17 +717,17 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             
             # JWTトークンは自動的に有効期限切れになるため、削除処理は不要
             
-            logger.info(f"OAuth authentication successful for user: {request.user.email}, saved {len(saved_accounts)} accounts")
+            logger.info(f"OAuth authentication successful for user: {user.email}, saved {len(saved_accounts)} accounts")
             
             # 成功ページにリダイレクト
             if target_account_id:
-                return redirect(f"/settings?success=oauth_account_updated&account_id={saved_accounts[0].account_id if saved_accounts else ''}")
+                return redirect(f"http://localhost:3000/settings?success=oauth_account_updated&account_id={saved_accounts[0].account_id if saved_accounts else ''}")
             else:
-                return redirect(f"/settings?success=oauth_success&accounts={len(saved_accounts)}")
+                return redirect(f"http://localhost:3000/settings?success=oauth_success&accounts={len(saved_accounts)}")
                 
         except Exception as e:
             logger.error(f"OAuth callback error: {str(e)}")
-            return redirect(f"/settings?error=callback_error&message={str(e)}")
+            return redirect(f"http://localhost:3000/settings?error=callback_error&message={str(e)}")
     
     @action(detail=False, methods=['post'])
     def create_demo_accounts(self, request):

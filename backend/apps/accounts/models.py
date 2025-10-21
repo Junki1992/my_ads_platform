@@ -16,10 +16,6 @@ class User(AbstractUser):
     two_factor_secret = models.CharField(_('2FA secret'), max_length=32, blank=True)
     backup_codes = models.TextField(_('backup codes'), blank=True)  # JSON形式で保存
     
-    # Meta API設定（各ユーザーが自分のApp ID/Secretを設定）
-    meta_app_id = models.CharField(_('Meta App ID'), max_length=100, blank=True)
-    meta_app_secret = models.CharField(_('Meta App Secret'), max_length=200, blank=True)
-    
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
     
