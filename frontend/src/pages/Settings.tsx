@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Popconfirm, Modal, Alert, Tabs, Badge, message } from 'antd';
+import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Modal, Alert, Tabs, Badge, message, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
@@ -47,6 +47,11 @@ const Settings: React.FC = () => {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorSetupVisible, setTwoFactorSetupVisible] = useState(false);
   const [twoFactorDisableVisible, setTwoFactorDisableVisible] = useState(false);
+  
+  // 削除確認モーダル
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState<MetaAccount | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -197,12 +202,26 @@ const Settings: React.FC = () => {
     setIsModalVisible(true);
   };
 
-  const handleDelete = async (accountId: number) => {
+  const handleDeleteClick = (account: MetaAccount) => {
+    setDeletingAccount(account);
+    setDeleteModalVisible(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingAccount) return;
+    
+    setDeleting(true);
     try {
-      await metaAccountService.deleteMetaAccount(accountId);
+      await metaAccountService.deleteMetaAccount(deletingAccount.id);
+      message.success('アカウントを削除しました');
+      setDeleteModalVisible(false);
+      setDeletingAccount(null);
       loadMetaAccounts();
     } catch (error) {
       console.error('Failed to delete Meta account:', error);
+      message.error('アカウントの削除に失敗しました');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -214,16 +233,6 @@ const Settings: React.FC = () => {
       window.location.href = response.auth_url;
     } catch (error) {
       console.error('Failed to get OAuth URL for account:', error);
-    }
-  };
-
-  const handleCreateDemoAccounts = async () => {
-    try {
-      const response = await metaAccountService.createDemoAccounts();
-      console.log('Demo accounts created:', response.message);
-      loadMetaAccounts(); // アカウント一覧を再読み込み
-    } catch (error) {
-      console.error('Failed to create demo accounts:', error);
     }
   };
 
@@ -367,16 +376,14 @@ const Settings: React.FC = () => {
           >
             {t('edit')}
           </Button>
-          <Popconfirm
-            title={t('deleteAccountConfirm')}
-            onConfirm={() => handleDelete(record.id)}
-            okText={t('yes')}
-            cancelText={t('no')}
+          <Button 
+            type="link" 
+            danger 
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteClick(record)}
           >
-            <Button type="link" danger icon={<DeleteOutlined />}>
-              {t('delete')}
-            </Button>
-          </Popconfirm>
+            {t('delete')}
+          </Button>
         </Space>
       ),
     },
@@ -578,14 +585,6 @@ const Settings: React.FC = () => {
               style={{ backgroundColor: '#1877f2', borderColor: '#1877f2' }}
             >
               <span className="button-text">Meta公式認証で自動取得</span>
-            </Button>
-            <Button 
-              type="default"
-              icon={<PlusOutlined />}
-              onClick={handleCreateDemoAccounts}
-              style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: 'white' }}
-            >
-              <span className="button-text">開発用：ダミーアカウント作成</span>
             </Button>
             <Button 
               icon={<SwapOutlined />}
@@ -878,6 +877,88 @@ const Settings: React.FC = () => {
           loadTwoFactorStatus();
         }}
       />
+
+      <Modal
+        title={
+          <span style={{ color: '#ff4d4f' }}>
+            <DeleteOutlined /> アカウント削除の確認
+          </span>
+        }
+        open={deleteModalVisible}
+        onCancel={() => {
+          setDeleteModalVisible(false);
+          setDeletingAccount(null);
+        }}
+        footer={[
+          <Button 
+            key="cancel" 
+            onClick={() => {
+              setDeleteModalVisible(false);
+              setDeletingAccount(null);
+            }}
+          >
+            キャンセル
+          </Button>,
+          <Button 
+            key="delete" 
+            type="primary" 
+            danger 
+            loading={deleting}
+            onClick={handleDeleteConfirm}
+          >
+            削除する
+          </Button>,
+        ]}
+        width={600}
+      >
+        {deletingAccount && (
+          <div>
+            <Alert
+              message="以下のアカウントを削除しようとしています"
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            
+            <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fafafa' }}>
+              <Typography.Text strong>アカウント名：</Typography.Text>
+              <Typography.Text>{deletingAccount.account_name}</Typography.Text>
+              <br />
+              <Typography.Text strong>アカウントID：</Typography.Text>
+              <Typography.Text>{deletingAccount.account_id}</Typography.Text>
+            </Card>
+
+            <Alert
+              message="削除すると以下のデータも削除されます"
+              description={
+                <div>
+                  <ul style={{ marginTop: 8, marginBottom: 0 }}>
+                    <li><strong>このアカウントに紐づくすべてのキャンペーン</strong></li>
+                    <li><strong>キャンペーンに含まれる広告セット</strong></li>
+                    <li><strong>広告セットに含まれる広告</strong></li>
+                    <li><strong>関連するパフォーマンスデータ</strong></li>
+                  </ul>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <Typography.Text type="danger" strong>
+                    ⚠️ この操作は取り消せません
+                  </Typography.Text>
+                  <br />
+                  <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                    ※ Meta広告マネージャー上の広告は削除されません
+                  </Typography.Text>
+                </div>
+              }
+              type="error"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+
+            <Typography.Paragraph style={{ marginBottom: 0 }}>
+              本当に削除してもよろしいですか？
+            </Typography.Paragraph>
+          </div>
+        )}
+      </Modal>
 
     </div>
   );
