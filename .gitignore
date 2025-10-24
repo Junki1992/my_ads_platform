@@ -68,6 +68,12 @@ dmypy.json
 *.backup
 *.tmp
 
+# Debug/development scripts
+debug_*.py
+check_*.py
+cleanup_*.py
+disable_*.py
+
 # SSL certificates
 *.pem
 *.key
