@@ -1,0 +1,48 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov
+*.log
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Database
+*.sqlite3
+db.sqlite3
+
+# Media files
+media/
+
+# Documentation
+docs/
+*.md
+
+# Git
+.git
+.gitignore
+
+# Tests
+tests/
+*.test.py
+test_*.py
+
