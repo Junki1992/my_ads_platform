@@ -1,0 +1,33 @@
+# ==============================================================================
+# フロントエンド本番用Dockerfile
+# ==============================================================================
+
+# ビルドステージ
+FROM node:18-alpine as build
+
+WORKDIR /app
+
+# 依存関係をインストール
+COPY package*.json ./
+RUN npm ci --only=production
+
+# ソースコードをコピー
+COPY . .
+
+# 本番用ビルド
+ENV REACT_APP_API_URL=http://localhost:8000
+RUN npm run build
+
+# 本番ステージ（軽量）
+FROM nginx:alpine
+
+# ビルド成果物をコピー
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Nginx設定（オプション）
+# COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+
