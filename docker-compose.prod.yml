@@ -33,8 +33,10 @@ services:
       - ./backend:/app
       - static_volume:/app/static
       - media_volume:/app/media
-    ports:
-      - "8000:8000"
+    # ports:  # Nginxがプロキシするので外部公開不要
+    #   - "8000:8000"
+    expose:
+      - "8000"  # コンテナ間通信用
     depends_on:
       - db
       - redis
