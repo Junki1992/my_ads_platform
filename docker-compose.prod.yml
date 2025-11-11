@@ -7,16 +7,16 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports:  # 本番環境では外部公開不要（内部通信のみ）
+    #   - "5432:5432"
     restart: always
     networks:
       - app-network
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # ports:  # 本番環境では外部公開不要（内部通信のみ）
+    #   - "6379:6379"
     restart: always
     networks:
       - app-network
