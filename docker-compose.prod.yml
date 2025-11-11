@@ -70,6 +70,7 @@ services:
       - static_volume:/app/static:ro
       - media_volume:/app/media:ro
       - ./frontend/build:/usr/share/nginx/html:ro  # ローカルビルド済みを直接マウント
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL証明書
     depends_on:
       - backend
     restart: always
