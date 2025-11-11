@@ -50,15 +50,15 @@ services:
     networks:
       - app-network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-    volumes:
-      - frontend_build:/app/build
-    restart: always
-    networks:
-      - app-network
+  # frontend:  # ローカルビルド済みなのでコンテナ不要
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.prod
+  #   volumes:
+  #     - frontend_build:/app/build
+  #   restart: always
+  #   networks:
+  #     - app-network
 
   nginx:
     image: nginx:alpine
@@ -70,11 +70,10 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - static_volume:/app/static:ro
       - media_volume:/app/media:ro
-      - frontend_build:/usr/share/nginx/html:ro
+      - ./frontend/build:/usr/share/nginx/html:ro  # ローカルビルド済みを直接マウント
       - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
-      - frontend
     restart: always
     networks:
       - app-network
@@ -120,7 +119,7 @@ volumes:
   redis_data:
   static_volume:
   media_volume:
-  frontend_build:
+  # frontend_build:  # ローカルビルド済みを直接使うので不要
 
 networks:
   app-network:
