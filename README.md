@@ -9,6 +9,7 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - ✅ 二要素認証（2FA/TOTP）
 - ✅ Rate Limiting（DoS攻撃対策）
 - ✅ パスワード変更機能
+- ✅ Metaアカウント削除時のパスワード確認（誤削除防止）
 
 ### 多言語・国際化
 - ✅ 多言語対応（日本語、英語、中国語、韓国語）
@@ -18,6 +19,13 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - ✅ アドセット管理
 - ✅ 一括入稿機能
 - ✅ Meta API連携
+
+### Metaアカウント管理
+- ✅ Meta OAuth 2.0認証（公式認証フロー）
+- ✅ 複数Metaアカウント管理
+- ✅ アクセストークン自動更新
+- ✅ 広告アカウント一覧取得
+- ✅ 削除時のパスワード確認（セキュリティ強化）
 
 ### その他
 - ✅ アラート機能
@@ -45,8 +53,12 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - pytest（テストカバレッジ80%目標）
 - pytest-django
 - factory-boy（テストフィクスチャ）
-- Docker & Docker Compose
+- Docker & Docker Compose（本番環境対応）
+- Nginx（リバースプロキシ + 静的ファイル配信）
+- Gunicorn（WSGIサーバー）
+- Let's Encrypt（SSL/HTTPS）
 - Git（バージョン管理）
+- GCP Compute Engine（デプロイ環境）
 
 ## セットアップ
 
@@ -60,9 +72,17 @@ cp env.example .env
 **重要な環境変数**:
 - `SECRET_KEY`: Django シークレットキー
 - `JWT_SECRET_KEY`: JWT トークン用シークレットキー
-- `META_APP_ID`, `META_APP_SECRET`: Meta API認証情報
+- `META_APP_ID`, `META_APP_SECRET`: Meta API認証情報（プラットフォーム共通）
+- `META_ACCESS_TOKEN`: Meta長期アクセストークン（オプション）
+- `FRONTEND_URL`: フロントエンドURL（OAuth認証時のリダイレクト先）
+- `ALLOWED_HOSTS`: 許可するホスト名（カンマ区切り）
 - `REDIS_URL`: Redis接続URL
 - `SENTRY_DSN`: エラー監視（オプション）
+
+**本番環境追加設定**:
+- `DEBUG`: `False`に設定
+- `SECURE_SSL_REDIRECT`: `True`（HTTPS強制）
+- `SECURE_PROXY_SSL_HEADER`: Nginxリバースプロキシ対応
 
 ### Backend
 
@@ -120,6 +140,17 @@ npm start
 - `POST /api/accounts/users/disable_2fa/` - 2FA無効化
 - `GET /api/accounts/users/get_2fa_status/` - 2FA状態確認
 
+### Metaアカウント管理
+- `GET /api/accounts/meta-accounts/` - Metaアカウント一覧取得
+- `POST /api/accounts/meta-accounts/` - Metaアカウント作成
+- `PUT /api/accounts/meta-accounts/{id}/` - Metaアカウント更新
+- `DELETE /api/accounts/meta-accounts/{id}/` - Metaアカウント削除（パスワード確認必須）
+- `GET /api/accounts/meta-accounts/oauth_authorize/` - OAuth認証URL取得
+- `GET /api/accounts/meta-accounts/{id}/oauth_authorize_account/` - 特定アカウントのOAuth認証URL取得
+- `GET /api/accounts/meta-accounts/oauth_callback/` - OAuth認証コールバック処理
+- `POST /api/accounts/meta-accounts/exchange_token/` - 短期トークンを長期トークンに変換
+- `POST /api/accounts/meta-accounts/fetch_accounts/` - Meta広告アカウント一覧取得
+
 ### 開発環境での認証
 
 初回セットアップ後は、`python manage.py createsuperuser`で作成したアカウントでログインしてください。
@@ -167,29 +198,106 @@ npm test
 
 ## デプロイ
 
+### Docker Compose（本番環境）
+
+本番環境用のデプロイスクリプトを提供しています。
+
+**クイックデプロイ**:
+```bash
+# 完全デプロイ（バックエンド + フロントエンド）
+./deploy.sh
+
+# バックエンドのみデプロイ
+./deploy-backend-only.sh
+
+# フロントエンドのみデプロイ（高速）
+./deploy-frontend-only.sh
+```
+
+**本番環境構成**:
+- **Nginx**: リバースプロキシ + 静的ファイル配信（HTTPS対応）
+- **Backend**: Django + Gunicorn（ポート8000）
+- **Frontend**: React（ビルド済み静的ファイル）
+- **PostgreSQL**: データベース
+- **Redis**: キャッシュ + Celeryブローカー
+- **Celery**: 非同期タスク実行
+- **Celery Beat**: 定期タスクスケジューラ
+
 ### 本番環境設定
 
 1. `.env`ファイルで本番環境の設定を行う
 2. `DEBUG=False`に設定
 3. `SECRET_KEY`と`JWT_SECRET_KEY`を変更
-4. PostgreSQLデータベースを設定
-5. Redisを設定
-6. フィーチャーフラグを適切に設定
-7. 静的ファイルを収集: `python manage.py collectstatic`
+4. `FRONTEND_URL`を本番環境のURLに設定（例: `https://yourdomain.com`）
+5. `ALLOWED_HOSTS`にドメイン名を追加
+6. PostgreSQLデータベースを設定
+7. Redisを設定
+8. フィーチャーフラグを適切に設定
+9. 静的ファイルを収集: `python manage.py collectstatic`
+
+### GCP VM デプロイ
+
+**前提条件**:
+- GCP VMインスタンスが作成済み
+- Docker、Docker Composeがインストール済み
+- ドメイン名が設定済み（SSL証明書用）
+
+**デプロイ手順**:
+```bash
+# 1. VMにSSH接続
+gcloud compute ssh your-instance --zone=your-zone
+
+# 2. リポジトリをクローン
+git clone https://github.com/yourusername/my_ads_platform.git
+cd my_ads_platform
+
+# 3. 環境変数設定
+cp env.example .env
+nano .env  # 必要な設定を追加
+
+# 4. SSL証明書取得（Let's Encrypt）
+sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com
+
+# 5. Docker Composeで起動
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 6. マイグレーション実行
+docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
+
+# 7. 静的ファイル収集
+docker compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
+
+# 8. スーパーユーザー作成
+docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+```
+
+**デプロイ後の更新**:
+```bash
+# ローカルから簡単デプロイ
+./deploy.sh  # 全体デプロイ
+./deploy-frontend-only.sh  # フロントエンドのみ（高速）
+./deploy-backend-only.sh  # バックエンドのみ
+```
 
 ### セキュリティチェックリスト
 
 - [ ] SECRET_KEYとJWT_SECRET_KEYを変更
 - [ ] DEBUG=Falseに設定
 - [ ] ALLOWED_HOSTSを設定
-- [ ] HTTPS/SSL設定
+- [ ] FRONTEND_URLを本番環境のURLに設定
+- [ ] HTTPS/SSL設定（Let's Encrypt推奨）
+- [ ] Nginxリバースプロキシ設定
+- [ ] SECURE_PROXY_SSL_HEADERの設定
 - [ ] CORS設定の確認
 - [ ] データベース認証情報の保護
+- [ ] Meta API認証情報の保護
 - [ ] Sentryの設定（エラー監視）
 - [x] Rate Limiting実装済み
 - [x] 二要素認証実装済み
+- [x] パスワード確認による削除保護実装済み
 - [ ] 決済システム設定（本番環境）
 - [ ] バックアップ戦略の確立
+- [ ] Docker自動再起動設定（`restart: always`）
 
 ## ポートフォリオ
 
@@ -202,11 +310,15 @@ npm test
 - **二要素認証（2FA/TOTP）** 🔐
 - **Rate Limiting（DoS攻撃対策）** 🛡️
 - **包括的テストカバレッジ（pytest）** ✅
+- **Meta OAuth 2.0認証統合** 🔗
+- **Docker Compose本番環境デプロイ** 🚀
+- **Nginx + Gunicorn + HTTPS** 🔒
 - 多言語対応（i18next）
 - レスポンシブデザイン
-- バックエンド非同期処理（Celery）
+- バックエンド非同期処理（Celery + Redis）
 - ファイルアップロード・バリデーション
-- Meta API連携
+- Meta API連携（広告アカウント管理）
+- GCP Compute Engineデプロイ
 
 **セキュリティ機能：**
 - IPベースのRate Limiting
@@ -214,6 +326,12 @@ npm test
 - バックアップコード生成
 - JWTトークンブラックリスト
 - パスワードハッシュ化（Django標準）
+- **削除操作時のパスワード確認（誤削除防止）** ✅
+- HTTPS/SSL（Let's Encrypt）
+- Nginxリバースプロキシ
+- SECURE_PROXY_SSL_HEADER設定
+- CORS保護
+- Meta APIトークン暗号化保存
 
 **テスト：**
 - 30+のテストケース実装
@@ -225,6 +343,14 @@ npm test
 - このリポジトリは学習用途のみの開発プロジェクトです
 - 実際のMeta APIキーは含まれていません
 - 本番環境での使用には適切なセキュリティ設定が必要です
+
+**Meta for Developers設定（OAuth認証を使用する場合）：**
+1. [Meta for Developers](https://developers.facebook.com/)でアプリを作成
+2. **アプリドメイン**に本番環境のドメインを追加
+3. **有効なOAuthリダイレクトURI**に以下を追加：
+   - `https://yourdomain.com/api/accounts/meta-accounts/oauth_callback/`
+4. **App ID**と**App Secret**を`.env`ファイルに設定
+5. 必要な権限を付与：`ads_management`, `ads_read`, `business_management`
 
 ## ⚠️ 免責事項
 
