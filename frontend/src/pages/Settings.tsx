@@ -52,6 +52,7 @@ const Settings: React.FC = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState<MetaAccount | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
 
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -204,22 +205,30 @@ const Settings: React.FC = () => {
 
   const handleDeleteClick = (account: MetaAccount) => {
     setDeletingAccount(account);
+    setDeletePassword('');
     setDeleteModalVisible(true);
   };
 
   const handleDeleteConfirm = async () => {
     if (!deletingAccount) return;
     
+    if (!deletePassword) {
+      message.error('パスワードを入力してください');
+      return;
+    }
+    
     setDeleting(true);
     try {
-      await metaAccountService.deleteMetaAccount(deletingAccount.id);
-      message.success('アカウントを削除しました');
+      const response = await metaAccountService.deleteMetaAccount(deletingAccount.id, deletePassword);
+      message.success(response.message || 'アカウントを削除しました');
       setDeleteModalVisible(false);
       setDeletingAccount(null);
+      setDeletePassword('');
       loadMetaAccounts();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete Meta account:', error);
-      message.error('アカウントの削除に失敗しました');
+      const errorMessage = error.response?.data?.error || 'アカウントの削除に失敗しました';
+      message.error(errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -953,9 +962,18 @@ const Settings: React.FC = () => {
               style={{ marginBottom: 16 }}
             />
 
-            <Typography.Paragraph style={{ marginBottom: 0 }}>
-              本当に削除してもよろしいですか？
+            <Typography.Paragraph style={{ marginTop: 16, marginBottom: 8 }}>
+              削除を実行するには、ログインパスワードを入力してください：
             </Typography.Paragraph>
+            
+            <Input.Password
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="ログインパスワード"
+              size="large"
+              disabled={deleting}
+              onPressEnter={handleDeleteConfirm}
+            />
           </div>
         )}
       </Modal>

@@ -54,9 +54,12 @@ class MetaAccountService {
     return response.data;
   }
 
-  // Metaアカウント削除
-  async deleteMetaAccount(id: number): Promise<void> {
-    await api.delete(`/accounts/meta-accounts/${id}/`);
+  // Metaアカウント削除（パスワード確認必須）
+  async deleteMetaAccount(id: number, password: string): Promise<{ message: string }> {
+    const response = await api.delete(`/accounts/meta-accounts/${id}/`, {
+      data: { password }
+    });
+    return response.data;
   }
 
   // トークン変換（短期→長期）

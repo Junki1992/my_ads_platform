@@ -367,6 +367,32 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         """Metaアカウント作成時にユーザーを自動設定"""
         serializer.save(user=self.request.user)
     
+    def destroy(self, request, *args, **kwargs):
+        """Metaアカウント削除（パスワード確認必須）"""
+        password = request.data.get('password')
+        
+        if not password:
+            return Response({
+                'error': 'パスワードの入力が必要です'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # パスワード検証
+        if not request.user.check_password(password):
+            return Response({
+                'error': 'パスワードが正しくありません'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # パスワード検証成功後、削除を実行
+        instance = self.get_object()
+        account_name = instance.account_name
+        self.perform_destroy(instance)
+        
+        logger.info(f"Meta account deleted: {account_name} (user: {request.user.email})")
+        
+        return Response({
+            'message': f'{account_name} を削除しました'
+        }, status=status.HTTP_200_OK)
+    
     @action(detail=False, methods=['post'])
     def exchange_token(self, request):
         """短期トークンを長期トークンに変換"""
