@@ -176,6 +176,9 @@ CELERY_TASK_SOFT_TIME_LIMIT = 60
 # Meta API設定
 META_APP_ID = config('META_APP_ID', default='')
 META_APP_SECRET = config('META_APP_SECRET', default='')
+
+# フロントエンドURL
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 META_ACCESS_TOKEN = config('META_ACCESS_TOKEN', default='')
 
 # Stripe設定

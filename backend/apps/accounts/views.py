@@ -560,6 +560,9 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         from rest_framework.permissions import AllowAny
         import jwt
         
+        # フロントエンドURLを取得
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        
         code = request.GET.get('code')
         state = request.GET.get('state')
         error = request.GET.get('error')
@@ -567,7 +570,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         # エラーハンドリング
         if error:
             logger.error(f"OAuth error: {error}")
-            return redirect(f"http://localhost:3000/settings?error=oauth_error&message={error}")
+            return redirect(f"{frontend_url}/settings?error=oauth_error&message={error}")
         
         # stateパラメータの検証（JWTトークンから復号化）
         try:
@@ -582,18 +585,18 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
                 logger.error(f"User not found: {user_id}")
-                return redirect("http://localhost:3000/settings?error=user_not_found")
+                return redirect(f"{frontend_url}/settings?error=user_not_found")
                 
         except jwt.ExpiredSignatureError:
             logger.error("OAuth state token expired")
-            return redirect("http://localhost:3000/settings?error=expired_state")
+            return redirect(f"{frontend_url}/settings?error=expired_state")
         except jwt.InvalidTokenError:
             logger.error("Invalid OAuth state token")
-            return redirect("http://localhost:3000/settings?error=invalid_state")
+            return redirect(f"{frontend_url}/settings?error=invalid_state")
         
         if not code:
             logger.error("No authorization code received")
-            return redirect("http://localhost:3000/settings?error=no_code")
+            return redirect(f"{frontend_url}/settings?error=no_code")
         
         try:
             # プラットフォーム統一のMeta App ID/Secretを使用
@@ -602,7 +605,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             
             if not app_id or not app_secret:
                 logger.error("META_APP_ID or META_APP_SECRET is not configured in settings")
-                return redirect("http://localhost:3000/settings?error=config_error")
+                return redirect(f"{frontend_url}/settings?error=config_error")
             
             redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/meta-accounts/oauth_callback/"
             
@@ -621,7 +624,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             if 'access_token' not in token_data:
                 error_message = token_data.get('error', {}).get('message', 'Token exchange failed')
                 logger.error(f"Token exchange failed: {error_message}")
-                return redirect(f"http://localhost:3000/settings?error=token_exchange_failed&message={error_message}")
+                return redirect(f"{frontend_url}/settings?error=token_exchange_failed&message={error_message}")
             
             access_token = token_data['access_token']
             
@@ -640,7 +643,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             if 'access_token' not in long_token_data:
                 error_message = long_token_data.get('error', {}).get('message', 'Long token exchange failed')
                 logger.error(f"Long token exchange failed: {error_message}")
-                return redirect(f"http://localhost:3000/settings?error=long_token_failed&message={error_message}")
+                return redirect(f"{frontend_url}/settings?error=long_token_failed&message={error_message}")
             
             long_access_token = long_token_data['access_token']
             
@@ -656,7 +659,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             
             if 'id' not in user_data:
                 logger.error("Failed to get user info from Meta")
-                return redirect("http://localhost:3000/settings?error=user_info_failed")
+                return redirect(f"{frontend_url}/settings?error=user_info_failed")
             
             # 広告アカウント一覧を取得
             accounts_url = 'https://graph.facebook.com/v18.0/me/adaccounts'
@@ -686,7 +689,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                     logger.info(f"Updated token for specific account: {target_account.account_id}")
                 except MetaAccount.DoesNotExist:
                     logger.error(f"Target account not found: {target_account_id}")
-                    return redirect("http://localhost:3000/settings?error=account_not_found")
+                    return redirect(f"{frontend_url}/settings?error=account_not_found")
             else:
                 # 全アカウントを保存（従来の動作）
                 if 'data' in accounts_data:
@@ -721,13 +724,13 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             
             # 成功ページにリダイレクト
             if target_account_id:
-                return redirect(f"http://localhost:3000/settings?success=oauth_account_updated&account_id={saved_accounts[0].account_id if saved_accounts else ''}")
+                return redirect(f"{frontend_url}/settings?success=oauth_account_updated&account_id={saved_accounts[0].account_id if saved_accounts else ''}")
             else:
-                return redirect(f"http://localhost:3000/settings?success=oauth_success&accounts={len(saved_accounts)}")
+                return redirect(f"{frontend_url}/settings?success=oauth_success&accounts={len(saved_accounts)}")
                 
         except Exception as e:
             logger.error(f"OAuth callback error: {str(e)}")
-            return redirect(f"http://localhost:3000/settings?error=callback_error&message={str(e)}")
+            return redirect(f"{frontend_url}/settings?error=callback_error&message={str(e)}")
     
     @action(detail=False, methods=['post'])
     def create_demo_accounts(self, request):
