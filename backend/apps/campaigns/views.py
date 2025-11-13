@@ -1100,21 +1100,21 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'conversions': insights.get('conversions', 0),
                     }
                 elif campaign.status == 'ACTIVE':
-                    # アクティブなキャンペーンの場合のみデフォルト値を使用
+                    # アクティブなキャンペーンの場合、データがない場合は0を返す（デフォルト値は使わない）
                     campaign_data = {
                         'campaign_id': campaign.id,
                         'campaign_name': campaign.name,
                         'status': campaign.status,
                         'budget': float(campaign.budget),
-                        'spend': float(campaign.budget) * 0.75,
-                        'impressions': int(float(campaign.budget) * 150),
-                        'clicks': int(float(campaign.budget) * 3),
-                        'ctr': 2.0,
+                        'spend': 0,
+                        'impressions': 0,
+                        'clicks': 0,
+                        'ctr': 0,
                         'cpc': 0,
                         'cpm': 0,
                         'reach': 0,
                         'frequency': 0,
-                        'conversions': int(float(campaign.budget) * 0.1),
+                        'conversions': 0,
                     }
                 else:
                     # 一時停止やその他のステータスの場合は0
@@ -1138,22 +1138,22 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 
             except Exception as e:
                 logger.error(f"Failed to fetch reporting data for campaign {campaign.id}: {str(e)}")
-                # エラーの場合はデフォルト値を使用
+                # エラーの場合は0を返す（デフォルト値は使わない）
                 if campaign.status == 'ACTIVE':
                     campaign_data = {
                         'campaign_id': campaign.id,
                         'campaign_name': campaign.name,
                         'status': campaign.status,
                         'budget': float(campaign.budget),
-                        'spend': float(campaign.budget) * 0.75,
-                        'impressions': int(float(campaign.budget) * 150),
-                        'clicks': int(float(campaign.budget) * 3),
-                        'ctr': 2.0,
+                        'spend': 0,
+                        'impressions': 0,
+                        'clicks': 0,
+                        'ctr': 0,
                         'cpc': 0,
                         'cpm': 0,
                         'reach': 0,
                         'frequency': 0,
-                        'conversions': int(float(campaign.budget) * 0.1),
+                        'conversions': 0,
                     }
                 else:
                     campaign_data = {
