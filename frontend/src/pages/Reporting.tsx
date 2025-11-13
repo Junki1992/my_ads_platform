@@ -217,7 +217,13 @@ const Reporting: React.FC = () => {
               style={{ width: '100%' }}
               size={isMobile ? 'small' : 'middle'}
               value={dateRange}
-              onChange={setDateRange}
+              onChange={(dates) => {
+                setDateRange(dates);
+                // 日付範囲変更時に自動的にデータを再取得
+                if (dates && dates[0] && dates[1]) {
+                  setTimeout(() => fetchReportingData(), 100);
+                }
+              }}
             />
           </Col>
           <Col xs={24} sm={12} md={6}>

@@ -922,13 +922,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def reporting_data(self, request):
         """レポート用のパフォーマンスデータを取得"""
+        from apps.accounts.models import MetaAccount
+        import requests
+        from datetime import datetime, timedelta
+        
         user = request.user
         campaigns = Campaign.objects.filter(user=user).exclude(status__in=['DELETED', 'ARCHIVED'])
         
         # クエリパラメータから取得
         campaign_id = request.GET.get('campaign_id', None)
-        start_date = request.GET.get('start_date', None)
-        end_date = request.GET.get('end_date', None)
+        start_date_str = request.GET.get('start_date', None)
+        end_date_str = request.GET.get('end_date', None)
         metrics = request.GET.get('metrics', 'impressions,clicks,spend').split(',')
         
         # キャンペーンフィルタリング
@@ -936,18 +940,70 @@ class CampaignViewSet(viewsets.ModelViewSet):
             campaigns = campaigns.filter(id=campaign_id)
         
         # 日付範囲のデフォルト値（過去30日）
-        if not start_date:
-            from datetime import datetime, timedelta
+        if not start_date_str or not end_date_str:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=30)
+            start_date_str = start_date.strftime('%Y-%m-%d')
+            end_date_str = end_date.strftime('%Y-%m-%d')
         
         reporting_data = []
         
         for campaign in campaigns:
             try:
-                # キャッシュからインサイトデータを取得（高速）
-                if campaign.cached_insights:
+                # Meta APIから指定期間のデータを取得
+                insights = None
+                
+                if campaign.campaign_id and campaign.meta_account:
+                    try:
+                        meta_account = campaign.meta_account
+                        api_base_url = 'https://graph.facebook.com/v18.0'
+                        headers = {'Authorization': f'Bearer {meta_account.access_token}'}
+                        
+                        insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
+                        params = {
+                            'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
+                            'time_range': f'{{"since":"{start_date_str}","until":"{end_date_str}"}}',
+                            'level': 'campaign'
+                        }
+                        
+                        response = requests.get(insights_url, headers=headers, params=params, timeout=10)
+                        
+                        if response.status_code == 200:
+                            insights_data = response.json()
+                            if 'data' in insights_data and len(insights_data['data']) > 0:
+                                insight = insights_data['data'][0]
+                                
+                                # コンバージョン数を抽出
+                                conversions = 0
+                                if 'actions' in insight:
+                                    for action in insight['actions']:
+                                        if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
+                                            conversions += int(action.get('value', 0))
+                                elif 'conversions' in insight:
+                                    for conversion in insight['conversions']:
+                                        conversions += int(conversion.get('value', 0))
+                                
+                                insights = {
+                                    'spend': float(insight.get('spend', 0)),
+                                    'impressions': int(insight.get('impressions', 0)),
+                                    'clicks': int(insight.get('clicks', 0)),
+                                    'ctr': float(insight.get('ctr', 0)),
+                                    'cpc': float(insight.get('cpc', 0)),
+                                    'cpm': float(insight.get('cpm', 0)),
+                                    'reach': int(insight.get('reach', 0)),
+                                    'frequency': float(insight.get('frequency', 0)),
+                                    'conversions': conversions,
+                                }
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch insights from Meta API for campaign {campaign.id}: {str(e)}")
+                        insights = None
+                
+                # Meta APIから取得できない場合はキャッシュを使用
+                if not insights and campaign.cached_insights:
                     insights = campaign.cached_insights
+                
+                # データが取得できた場合（Meta APIまたはキャッシュ）
+                if insights:
                     campaign_data = {
                         'campaign_id': campaign.id,
                         'campaign_name': campaign.name,
