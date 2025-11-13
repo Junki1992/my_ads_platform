@@ -72,13 +72,19 @@ export interface DashboardStats {
 
 class CampaignService {
   // キャンペーン一覧取得
-  async getCampaigns(params?: { status?: string; search?: string }): Promise<Campaign[]> {
+  async getCampaigns(params?: { status?: string; search?: string; page?: number; page_size?: number }): Promise<{ results: Campaign[]; count: number }> {
     const response = await api.get<any>('/campaigns/campaigns/', { params });
     // DRFのページネーションレスポンスに対応
     if (response.data && Array.isArray(response.data.results)) {
-      return response.data.results;
+      return {
+        results: response.data.results,
+        count: response.data.count || response.data.results.length
+      };
     }
-    return Array.isArray(response.data) ? response.data : [];
+    return {
+      results: Array.isArray(response.data) ? response.data : [],
+      count: Array.isArray(response.data) ? response.data.length : 0
+    };
   }
 
   // キャンペーン詳細取得

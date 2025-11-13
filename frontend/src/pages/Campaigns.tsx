@@ -27,13 +27,19 @@ const Campaigns: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [selectedMetaAccountId, setSelectedMetaAccountId] = useState<number | null>(null);
+  
+  // ページネーション
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
   // キャンペーン一覧を取得
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = async (page: number = currentPage, size: number = pageSize) => {
     setLoading(true);
     try {
-      const data = await campaignService.getCampaigns();
-      setCampaigns(data);
+      const data = await campaignService.getCampaigns({ page, page_size: size });
+      setCampaigns(data.results);
+      setTotal(data.count);
     } catch (error) {
       message.error('キャンペーンの取得に失敗しました');
       console.error('Failed to fetch campaigns:', error);
@@ -1104,7 +1110,19 @@ const Campaigns: React.FC = () => {
           dataSource={campaigns}
           loading={loading}
           rowKey="id"
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: total,
+            showSizeChanger: true,
+            showTotal: (total) => `全 ${total} 件`,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              setPageSize(size || 20);
+              fetchCampaigns(page, size || 20);
+            },
+          }}
           scroll={{ x: 800 }} // 横スクロール対応
           size="small"
           rowSelection={rowSelection}

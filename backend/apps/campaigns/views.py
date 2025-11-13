@@ -20,6 +20,16 @@ class CampaignViewSet(viewsets.ModelViewSet):
     """キャンペーン管理ViewSet"""
     permission_classes = [permissions.IsAuthenticated]
     
+    # ページネーション設定（1ページ20件）
+    from rest_framework.pagination import PageNumberPagination
+    
+    class CampaignPagination(PageNumberPagination):
+        page_size = 20
+        page_size_query_param = 'page_size'
+        max_page_size = 100
+    
+    pagination_class = CampaignPagination
+    
     def get_serializer_class(self):
         if self.action == 'list':
             return CampaignListSerializer
