@@ -76,6 +76,21 @@ class Campaign(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # インサイトキャッシュ（Meta API取得データ）
+    cached_insights = models.JSONField(default=dict, blank=True)
+    # cached_insights構造例:
+    # {
+    #   "spend": 1000.0,
+    #   "impressions": 50000,
+    #   "clicks": 1500,
+    #   "ctr": 3.0,
+    #   "cpc": 0.67,
+    #   "cpm": 20.0,
+    #   "reach": 45000,
+    #   "frequency": 1.11
+    # }
+    insights_updated_at = models.DateTimeField(null=True, blank=True)
+    
     class Meta:
         verbose_name = _('Campaign')
         verbose_name_plural = _('Campaigns')

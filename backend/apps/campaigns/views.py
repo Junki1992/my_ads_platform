@@ -935,12 +935,9 @@ class CampaignViewSet(viewsets.ModelViewSet):
         
         for campaign in campaigns:
             try:
-                # Meta APIからインサイトデータを取得
-                from .tasks import fetch_campaign_insights_from_meta
-                insights_result = fetch_campaign_insights_from_meta(campaign.id)
-                
-                if insights_result.get('status') == 'success':
-                    insights = insights_result.get('insights', {})
+                # キャッシュからインサイトデータを取得（高速）
+                if campaign.cached_insights:
+                    insights = campaign.cached_insights
                     campaign_data = {
                         'campaign_id': campaign.id,
                         'campaign_name': campaign.name,

@@ -1041,19 +1041,28 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     # インサイトデータを処理
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
+                        insights_dict = {
+                            'spend': float(insight.get('spend', 0)),
+                            'impressions': int(insight.get('impressions', 0)),
+                            'clicks': int(insight.get('clicks', 0)),
+                            'ctr': float(insight.get('ctr', 0)),
+                            'cpc': float(insight.get('cpc', 0)),
+                            'cpm': float(insight.get('cpm', 0)),
+                            'reach': int(insight.get('reach', 0)),
+                            'frequency': float(insight.get('frequency', 0)),
+                        }
+                        
+                        # キャッシュに保存
+                        from django.utils import timezone
+                        campaign.cached_insights = insights_dict
+                        campaign.insights_updated_at = timezone.now()
+                        campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
+                        logger.info(f"Cached insights for campaign {campaign.id}")
+                        
                         return {
                             'status': 'success',
                             'campaign_id': campaign.campaign_id,
-                            'insights': {
-                                'spend': float(insight.get('spend', 0)),
-                                'impressions': int(insight.get('impressions', 0)),
-                                'clicks': int(insight.get('clicks', 0)),
-                                'ctr': float(insight.get('ctr', 0)),
-                                'cpc': float(insight.get('cpc', 0)),
-                                'cpm': float(insight.get('cpm', 0)),
-                                'reach': int(insight.get('reach', 0)),
-                                'frequency': float(insight.get('frequency', 0)),
-                            }
+                            'insights': insights_dict
                         }
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
@@ -2120,19 +2129,28 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     # インサイトデータを処理
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
+                        insights_dict = {
+                            'spend': float(insight.get('spend', 0)),
+                            'impressions': int(insight.get('impressions', 0)),
+                            'clicks': int(insight.get('clicks', 0)),
+                            'ctr': float(insight.get('ctr', 0)),
+                            'cpc': float(insight.get('cpc', 0)),
+                            'cpm': float(insight.get('cpm', 0)),
+                            'reach': int(insight.get('reach', 0)),
+                            'frequency': float(insight.get('frequency', 0)),
+                        }
+                        
+                        # キャッシュに保存
+                        from django.utils import timezone
+                        campaign.cached_insights = insights_dict
+                        campaign.insights_updated_at = timezone.now()
+                        campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
+                        logger.info(f"Cached insights for campaign {campaign.id}")
+                        
                         return {
                             'status': 'success',
                             'campaign_id': campaign.campaign_id,
-                            'insights': {
-                                'spend': float(insight.get('spend', 0)),
-                                'impressions': int(insight.get('impressions', 0)),
-                                'clicks': int(insight.get('clicks', 0)),
-                                'ctr': float(insight.get('ctr', 0)),
-                                'cpc': float(insight.get('cpc', 0)),
-                                'cpm': float(insight.get('cpm', 0)),
-                                'reach': int(insight.get('reach', 0)),
-                                'frequency': float(insight.get('frequency', 0)),
-                            }
+                            'insights': insights_dict
                         }
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
@@ -2560,19 +2578,28 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     # インサイトデータを処理
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
+                        insights_dict = {
+                            'spend': float(insight.get('spend', 0)),
+                            'impressions': int(insight.get('impressions', 0)),
+                            'clicks': int(insight.get('clicks', 0)),
+                            'ctr': float(insight.get('ctr', 0)),
+                            'cpc': float(insight.get('cpc', 0)),
+                            'cpm': float(insight.get('cpm', 0)),
+                            'reach': int(insight.get('reach', 0)),
+                            'frequency': float(insight.get('frequency', 0)),
+                        }
+                        
+                        # キャッシュに保存
+                        from django.utils import timezone
+                        campaign.cached_insights = insights_dict
+                        campaign.insights_updated_at = timezone.now()
+                        campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
+                        logger.info(f"Cached insights for campaign {campaign.id}")
+                        
                         return {
                             'status': 'success',
                             'campaign_id': campaign.campaign_id,
-                            'insights': {
-                                'spend': float(insight.get('spend', 0)),
-                                'impressions': int(insight.get('impressions', 0)),
-                                'clicks': int(insight.get('clicks', 0)),
-                                'ctr': float(insight.get('ctr', 0)),
-                                'cpc': float(insight.get('cpc', 0)),
-                                'cpm': float(insight.get('cpm', 0)),
-                                'reach': int(insight.get('reach', 0)),
-                                'frequency': float(insight.get('frequency', 0)),
-                            }
+                            'insights': insights_dict
                         }
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
