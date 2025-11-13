@@ -17,7 +17,7 @@ echo "=========================================="
 # 1. ローカルでビルド
 echo -e "${GREEN}[1/4]${NC} ローカルでフロントエンドをビルド中..."
 cd frontend
-export REACT_APP_API_URL=http://136.110.83.25
+export REACT_APP_API_URL=https://lots-of-love.top/api
 npm run build
 cd ..
 
@@ -40,6 +40,6 @@ echo "=========================================="
 echo -e "${GREEN}✅ デプロイが完了しました！${NC}"
 echo "=========================================="
 echo ""
-echo "フロントエンド: http://136.110.83.25"
+echo "フロントエンド: https://lots-of-love.top"
 echo ""
 
