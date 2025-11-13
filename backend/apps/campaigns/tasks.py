@@ -1042,12 +1042,46 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
                         
-                        # コンバージョン数を抽出
+                        # コンバージョン数を抽出（重複を避ける）
                         conversions = 0
                         if 'actions' in insight:
+                            # まず、すべてのアクションを分類
+                            actions_dict = {}
                             for action in insight['actions']:
-                                if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
-                                    conversions += int(action.get('value', 0))
+                                action_type = action.get('action_type', '')
+                                action_value = int(action.get('value', 0))
+                                actions_dict[action_type] = action_value
+                            
+                            # offsite_conversion.fb_pixel_* を優先的にカウント（重複を避ける）
+                            # 1. offsite_conversion.fb_pixel_purchase を優先
+                            if 'offsite_conversion.fb_pixel_purchase' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_purchase']
+                            elif 'purchase' in actions_dict:
+                                # offsite_conversion.fb_pixel_purchase がない場合のみ purchase をカウント
+                                conversions += actions_dict['purchase']
+                            
+                            # 2. offsite_conversion.fb_pixel_complete_registration を優先
+                            if 'offsite_conversion.fb_pixel_complete_registration' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_complete_registration']
+                            elif 'complete_registration' in actions_dict:
+                                # offsite_conversion.fb_pixel_complete_registration がない場合のみ complete_registration をカウント
+                                conversions += actions_dict['complete_registration']
+                            
+                            # 3. offsite_conversion.fb_pixel_lead を優先
+                            if 'offsite_conversion.fb_pixel_lead' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_lead']
+                            elif 'lead' in actions_dict:
+                                # offsite_conversion.fb_pixel_lead がない場合のみ lead をカウント
+                                conversions += actions_dict['lead']
+                            
+                            # 4. その他の offsite_conversion（上記以外）
+                            for action_type, action_value in actions_dict.items():
+                                if action_type.startswith('offsite_conversion.fb_pixel_') and action_type not in [
+                                    'offsite_conversion.fb_pixel_purchase',
+                                    'offsite_conversion.fb_pixel_complete_registration',
+                                    'offsite_conversion.fb_pixel_lead'
+                                ]:
+                                    conversions += action_value
                         elif 'conversions' in insight:
                             # conversionsフィールドがある場合
                             for conversion in insight['conversions']:
@@ -2144,12 +2178,46 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
                         
-                        # コンバージョン数を抽出
+                        # コンバージョン数を抽出（重複を避ける）
                         conversions = 0
                         if 'actions' in insight:
+                            # まず、すべてのアクションを分類
+                            actions_dict = {}
                             for action in insight['actions']:
-                                if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
-                                    conversions += int(action.get('value', 0))
+                                action_type = action.get('action_type', '')
+                                action_value = int(action.get('value', 0))
+                                actions_dict[action_type] = action_value
+                            
+                            # offsite_conversion.fb_pixel_* を優先的にカウント（重複を避ける）
+                            # 1. offsite_conversion.fb_pixel_purchase を優先
+                            if 'offsite_conversion.fb_pixel_purchase' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_purchase']
+                            elif 'purchase' in actions_dict:
+                                # offsite_conversion.fb_pixel_purchase がない場合のみ purchase をカウント
+                                conversions += actions_dict['purchase']
+                            
+                            # 2. offsite_conversion.fb_pixel_complete_registration を優先
+                            if 'offsite_conversion.fb_pixel_complete_registration' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_complete_registration']
+                            elif 'complete_registration' in actions_dict:
+                                # offsite_conversion.fb_pixel_complete_registration がない場合のみ complete_registration をカウント
+                                conversions += actions_dict['complete_registration']
+                            
+                            # 3. offsite_conversion.fb_pixel_lead を優先
+                            if 'offsite_conversion.fb_pixel_lead' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_lead']
+                            elif 'lead' in actions_dict:
+                                # offsite_conversion.fb_pixel_lead がない場合のみ lead をカウント
+                                conversions += actions_dict['lead']
+                            
+                            # 4. その他の offsite_conversion（上記以外）
+                            for action_type, action_value in actions_dict.items():
+                                if action_type.startswith('offsite_conversion.fb_pixel_') and action_type not in [
+                                    'offsite_conversion.fb_pixel_purchase',
+                                    'offsite_conversion.fb_pixel_complete_registration',
+                                    'offsite_conversion.fb_pixel_lead'
+                                ]:
+                                    conversions += action_value
                         elif 'conversions' in insight:
                             # conversionsフィールドがある場合
                             for conversion in insight['conversions']:
@@ -2607,12 +2675,46 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
                         
-                        # コンバージョン数を抽出
+                        # コンバージョン数を抽出（重複を避ける）
                         conversions = 0
                         if 'actions' in insight:
+                            # まず、すべてのアクションを分類
+                            actions_dict = {}
                             for action in insight['actions']:
-                                if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
-                                    conversions += int(action.get('value', 0))
+                                action_type = action.get('action_type', '')
+                                action_value = int(action.get('value', 0))
+                                actions_dict[action_type] = action_value
+                            
+                            # offsite_conversion.fb_pixel_* を優先的にカウント（重複を避ける）
+                            # 1. offsite_conversion.fb_pixel_purchase を優先
+                            if 'offsite_conversion.fb_pixel_purchase' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_purchase']
+                            elif 'purchase' in actions_dict:
+                                # offsite_conversion.fb_pixel_purchase がない場合のみ purchase をカウント
+                                conversions += actions_dict['purchase']
+                            
+                            # 2. offsite_conversion.fb_pixel_complete_registration を優先
+                            if 'offsite_conversion.fb_pixel_complete_registration' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_complete_registration']
+                            elif 'complete_registration' in actions_dict:
+                                # offsite_conversion.fb_pixel_complete_registration がない場合のみ complete_registration をカウント
+                                conversions += actions_dict['complete_registration']
+                            
+                            # 3. offsite_conversion.fb_pixel_lead を優先
+                            if 'offsite_conversion.fb_pixel_lead' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_lead']
+                            elif 'lead' in actions_dict:
+                                # offsite_conversion.fb_pixel_lead がない場合のみ lead をカウント
+                                conversions += actions_dict['lead']
+                            
+                            # 4. その他の offsite_conversion（上記以外）
+                            for action_type, action_value in actions_dict.items():
+                                if action_type.startswith('offsite_conversion.fb_pixel_') and action_type not in [
+                                    'offsite_conversion.fb_pixel_purchase',
+                                    'offsite_conversion.fb_pixel_complete_registration',
+                                    'offsite_conversion.fb_pixel_lead'
+                                ]:
+                                    conversions += action_value
                         elif 'conversions' in insight:
                             # conversionsフィールドがある場合
                             for conversion in insight['conversions']:

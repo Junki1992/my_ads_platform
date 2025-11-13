@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.conf import settings
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 
 from .models import Campaign, AdSet, Ad
 from .serializers import (
@@ -948,59 +950,137 @@ class CampaignViewSet(viewsets.ModelViewSet):
         
         reporting_data = []
         
+        # Meta APIからデータを取得する関数
+        def fetch_insights_from_meta(campaign, start_date_str, end_date_str):
+            """Meta APIから指定期間のインサイトデータを取得"""
+            try:
+                if not campaign.campaign_id or not campaign.meta_account:
+                    return None
+                
+                meta_account = campaign.meta_account
+                api_base_url = 'https://graph.facebook.com/v18.0'
+                headers = {'Authorization': f'Bearer {meta_account.access_token}'}
+                
+                insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
+                params = {
+                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
+                    'time_range': f'{{"since":"{start_date_str}","until":"{end_date_str}"}}',
+                    'level': 'campaign'
+                }
+                
+                # タイムアウトを2秒に短縮（並列処理のため）
+                response = requests.get(insights_url, headers=headers, params=params, timeout=2)
+                
+                if response.status_code == 200:
+                    insights_data = response.json()
+                    if 'data' in insights_data and len(insights_data['data']) > 0:
+                        insight = insights_data['data'][0]
+                        
+                        # コンバージョン数を抽出（重複を避ける）
+                        conversions = 0
+                        if 'actions' in insight:
+                            logger.info(f"Campaign {campaign.campaign_id} actions: {insight.get('actions', [])}")
+                            
+                            # まず、すべてのアクションを分類
+                            actions_dict = {}
+                            for action in insight['actions']:
+                                action_type = action.get('action_type', '')
+                                action_value = int(action.get('value', 0))
+                                actions_dict[action_type] = action_value
+                                logger.info(f"  Action type: {action_type}, value: {action_value}")
+                            
+                            # offsite_conversion.fb_pixel_* を優先的にカウント（重複を避ける）
+                            # 1. offsite_conversion.fb_pixel_purchase を優先
+                            if 'offsite_conversion.fb_pixel_purchase' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_purchase']
+                                logger.info(f"  Added to conversions: offsite_conversion.fb_pixel_purchase = {actions_dict['offsite_conversion.fb_pixel_purchase']}, total: {conversions}")
+                            elif 'purchase' in actions_dict:
+                                # offsite_conversion.fb_pixel_purchase がない場合のみ purchase をカウント
+                                conversions += actions_dict['purchase']
+                                logger.info(f"  Added to conversions: purchase = {actions_dict['purchase']}, total: {conversions}")
+                            
+                            # 2. offsite_conversion.fb_pixel_complete_registration を優先
+                            if 'offsite_conversion.fb_pixel_complete_registration' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_complete_registration']
+                                logger.info(f"  Added to conversions: offsite_conversion.fb_pixel_complete_registration = {actions_dict['offsite_conversion.fb_pixel_complete_registration']}, total: {conversions}")
+                            elif 'complete_registration' in actions_dict:
+                                # offsite_conversion.fb_pixel_complete_registration がない場合のみ complete_registration をカウント
+                                conversions += actions_dict['complete_registration']
+                                logger.info(f"  Added to conversions: complete_registration = {actions_dict['complete_registration']}, total: {conversions}")
+                            
+                            # 3. offsite_conversion.fb_pixel_lead を優先
+                            if 'offsite_conversion.fb_pixel_lead' in actions_dict:
+                                conversions += actions_dict['offsite_conversion.fb_pixel_lead']
+                                logger.info(f"  Added to conversions: offsite_conversion.fb_pixel_lead = {actions_dict['offsite_conversion.fb_pixel_lead']}, total: {conversions}")
+                            elif 'lead' in actions_dict:
+                                # offsite_conversion.fb_pixel_lead がない場合のみ lead をカウント
+                                conversions += actions_dict['lead']
+                                logger.info(f"  Added to conversions: lead = {actions_dict['lead']}, total: {conversions}")
+                            
+                            # 4. その他の offsite_conversion（上記以外）
+                            for action_type, action_value in actions_dict.items():
+                                if action_type.startswith('offsite_conversion.fb_pixel_') and action_type not in [
+                                    'offsite_conversion.fb_pixel_purchase',
+                                    'offsite_conversion.fb_pixel_complete_registration',
+                                    'offsite_conversion.fb_pixel_lead'
+                                ]:
+                                    conversions += action_value
+                                    logger.info(f"  Added to conversions: {action_type} = {action_value}, total: {conversions}")
+                            
+                        elif 'conversions' in insight:
+                            logger.info(f"Campaign {campaign.campaign_id} conversions: {insight.get('conversions', [])}")
+                            for conversion in insight['conversions']:
+                                conversions += int(conversion.get('value', 0))
+                        
+                        logger.info(f"Campaign {campaign.campaign_id} final conversions: {conversions}")
+                        
+                        return {
+                            'spend': float(insight.get('spend', 0)),
+                            'impressions': int(insight.get('impressions', 0)),
+                            'clicks': int(insight.get('clicks', 0)),
+                            'ctr': float(insight.get('ctr', 0)),
+                            'cpc': float(insight.get('cpc', 0)),
+                            'cpm': float(insight.get('cpm', 0)),
+                            'reach': int(insight.get('reach', 0)),
+                            'frequency': float(insight.get('frequency', 0)),
+                            'conversions': conversions,
+                        }
+            except Exception as e:
+                logger.debug(f"Meta API fetch failed for campaign {campaign.id}: {str(e)}")
+            return None
+        
+        # 日付範囲が指定されている場合は、並列処理でMeta APIから取得
+        insights_dict = {}
+        if start_date_str and end_date_str:
+            # 最大10スレッドで並列処理（Meta APIのレート制限を考慮）
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_campaign = {
+                    executor.submit(fetch_insights_from_meta, campaign, start_date_str, end_date_str): campaign
+                    for campaign in campaigns
+                    if campaign.campaign_id and campaign.meta_account
+                }
+                
+                for future in as_completed(future_to_campaign):
+                    campaign = future_to_campaign[future]
+                    try:
+                        insights = future.result()
+                        if insights:
+                            insights_dict[campaign.id] = insights
+                    except Exception as e:
+                        logger.debug(f"Failed to get insights for campaign {campaign.id}: {str(e)}")
+        
         for campaign in campaigns:
             try:
-                # Meta APIから指定期間のデータを取得
                 insights = None
                 
-                if campaign.campaign_id and campaign.meta_account:
-                    try:
-                        meta_account = campaign.meta_account
-                        api_base_url = 'https://graph.facebook.com/v18.0'
-                        headers = {'Authorization': f'Bearer {meta_account.access_token}'}
-                        
-                        insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
-                        params = {
-                            'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
-                            'time_range': f'{{"since":"{start_date_str}","until":"{end_date_str}"}}',
-                            'level': 'campaign'
-                        }
-                        
-                        response = requests.get(insights_url, headers=headers, params=params, timeout=10)
-                        
-                        if response.status_code == 200:
-                            insights_data = response.json()
-                            if 'data' in insights_data and len(insights_data['data']) > 0:
-                                insight = insights_data['data'][0]
-                                
-                                # コンバージョン数を抽出
-                                conversions = 0
-                                if 'actions' in insight:
-                                    for action in insight['actions']:
-                                        if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
-                                            conversions += int(action.get('value', 0))
-                                elif 'conversions' in insight:
-                                    for conversion in insight['conversions']:
-                                        conversions += int(conversion.get('value', 0))
-                                
-                                insights = {
-                                    'spend': float(insight.get('spend', 0)),
-                                    'impressions': int(insight.get('impressions', 0)),
-                                    'clicks': int(insight.get('clicks', 0)),
-                                    'ctr': float(insight.get('ctr', 0)),
-                                    'cpc': float(insight.get('cpc', 0)),
-                                    'cpm': float(insight.get('cpm', 0)),
-                                    'reach': int(insight.get('reach', 0)),
-                                    'frequency': float(insight.get('frequency', 0)),
-                                    'conversions': conversions,
-                                }
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch insights from Meta API for campaign {campaign.id}: {str(e)}")
-                        insights = None
-                
+                # 日付範囲が指定されている場合は、Meta APIから取得したデータを優先
+                if campaign.id in insights_dict:
+                    insights = insights_dict[campaign.id]
+                    logger.info(f"Campaign {campaign.id} ({campaign.name}): Using Meta API data, conversions: {insights.get('conversions', 0)}")
                 # Meta APIから取得できない場合はキャッシュを使用
-                if not insights and campaign.cached_insights:
+                elif campaign.cached_insights:
                     insights = campaign.cached_insights
+                    logger.info(f"Campaign {campaign.id} ({campaign.name}): Using cached data, conversions: {insights.get('conversions', 0)}")
                 
                 # データが取得できた場合（Meta APIまたはキャッシュ）
                 if insights:
@@ -1019,42 +1099,40 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'frequency': insights.get('frequency', 0),
                         'conversions': insights.get('conversions', 0),
                     }
+                elif campaign.status == 'ACTIVE':
+                    # アクティブなキャンペーンの場合のみデフォルト値を使用
+                    campaign_data = {
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'status': campaign.status,
+                        'budget': float(campaign.budget),
+                        'spend': float(campaign.budget) * 0.75,
+                        'impressions': int(float(campaign.budget) * 150),
+                        'clicks': int(float(campaign.budget) * 3),
+                        'ctr': 2.0,
+                        'cpc': 0,
+                        'cpm': 0,
+                        'reach': 0,
+                        'frequency': 0,
+                        'conversions': int(float(campaign.budget) * 0.1),
+                    }
                 else:
-                    # Meta APIから取得できない場合
-                    if campaign.status == 'ACTIVE':
-                        # アクティブなキャンペーンの場合のみデフォルト値を使用
-                        campaign_data = {
-                            'campaign_id': campaign.id,
-                            'campaign_name': campaign.name,
-                            'status': campaign.status,
-                            'budget': float(campaign.budget),
-                            'spend': float(campaign.budget) * 0.75,
-                            'impressions': int(float(campaign.budget) * 150),
-                            'clicks': int(float(campaign.budget) * 3),
-                            'ctr': 2.0,
-                            'cpc': 0,
-                            'cpm': 0,
-                            'reach': 0,
-                            'frequency': 0,
-                            'conversions': int(float(campaign.budget) * 0.1),
-                        }
-                    else:
-                        # 一時停止やその他のステータスの場合は0
-                        campaign_data = {
-                            'campaign_id': campaign.id,
-                            'campaign_name': campaign.name,
-                            'status': campaign.status,
-                            'budget': float(campaign.budget),
-                            'spend': 0,
-                            'impressions': 0,
-                            'clicks': 0,
-                            'ctr': 0,
-                            'cpc': 0,
-                            'cpm': 0,
-                            'reach': 0,
-                            'frequency': 0,
-                            'conversions': 0,
-                        }
+                    # 一時停止やその他のステータスの場合は0
+                    campaign_data = {
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'status': campaign.status,
+                        'budget': float(campaign.budget),
+                        'spend': 0,
+                        'impressions': 0,
+                        'clicks': 0,
+                        'ctr': 0,
+                        'cpc': 0,
+                        'cpm': 0,
+                        'reach': 0,
+                        'frequency': 0,
+                        'conversions': 0,
+                    }
                 
                 reporting_data.append(campaign_data)
                 
@@ -1075,6 +1153,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'cpm': 0,
                         'reach': 0,
                         'frequency': 0,
+                        'conversions': int(float(campaign.budget) * 0.1),
                     }
                 else:
                     campaign_data = {
@@ -1090,6 +1169,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'cpm': 0,
                         'reach': 0,
                         'frequency': 0,
+                        'conversions': 0,
                     }
                 
                 reporting_data.append(campaign_data)
