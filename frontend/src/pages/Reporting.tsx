@@ -27,6 +27,10 @@ const Reporting: React.FC = () => {
   const [selectedCampaign, setSelectedCampaign] = useState<string>('all');
   const [dateRange, setDateRange] = useState<any>(null);
   const [selectedMetrics, setSelectedMetrics] = useState<string>('impressions');
+  
+  // ページネーション
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // 画面サイズの検出
   useEffect(() => {
@@ -70,6 +74,14 @@ const Reporting: React.FC = () => {
   useEffect(() => {
     fetchReportingData();
   }, []);
+  
+  // 指標変更時に自動更新
+  useEffect(() => {
+    if (reportingData) {
+      // データが既にある場合は再描画のみ（APIは呼ばない）
+      // チャートは自動的に更新される
+    }
+  }, [selectedMetrics]);
 
   // チャート用データを生成
   const generateChartData = () => {
@@ -79,11 +91,26 @@ const Reporting: React.FC = () => {
 
     return reportingData.campaigns.map((campaign, index) => ({
       name: campaign.campaign_name, // 実際のキャンペーン名をそのまま表示
-      impressions: campaign.impressions,
-      clicks: campaign.clicks,
-      spend: campaign.spend,
-      ctr: campaign.ctr,
+      value: campaign[selectedMetrics as keyof typeof campaign] as number,
     }));
+  };
+  
+  // 選択された指標に応じた表示設定
+  const getMetricConfig = () => {
+    switch (selectedMetrics) {
+      case 'impressions':
+        return { color: '#8884d8', name: t('impressions') };
+      case 'clicks':
+        return { color: '#82ca9d', name: t('clicks') };
+      case 'conversions':
+        return { color: '#9b59b6', name: 'CV数' };
+      case 'spend':
+        return { color: '#ffc658', name: t('spend') };
+      case 'ctr':
+        return { color: '#ff7c7c', name: t('ctr') };
+      default:
+        return { color: '#8884d8', name: t('impressions') };
+    }
   };
 
   // テーブルカラム定義
@@ -132,6 +159,13 @@ const Reporting: React.FC = () => {
       key: 'clicks',
       width: 100,
       render: (clicks: number) => clicks.toLocaleString(),
+    },
+    {
+      title: 'CV数',
+      dataIndex: 'conversions',
+      key: 'conversions',
+      width: 100,
+      render: (conversions: number) => conversions.toLocaleString(),
     },
     {
       title: t('ctr'),
@@ -196,6 +230,7 @@ const Reporting: React.FC = () => {
             >
               <Option value="impressions">{t('impressions')}</Option>
               <Option value="clicks">{t('clicks')}</Option>
+              <Option value="conversions">CV数</Option>
               <Option value="spend">{t('spend')}</Option>
               <Option value="ctr">{t('ctr')}</Option>
             </Select>
@@ -268,7 +303,18 @@ const Reporting: React.FC = () => {
               dataSource={reportingData?.campaigns || []}
               columns={columns}
               rowKey="campaign_id"
-              pagination={false}
+              pagination={{
+                current: currentPage,
+                pageSize: pageSize,
+                total: reportingData?.campaigns.length || 0,
+                showSizeChanger: true,
+                showTotal: (total) => `全 ${total} 件`,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                onChange: (page, size) => {
+                  setCurrentPage(page);
+                  setPageSize(size || 20);
+                },
+              }}
               scroll={{ x: 800 }}
               size="small"
             />
@@ -292,21 +338,20 @@ const Reporting: React.FC = () => {
                 <Tooltip 
                   labelStyle={{ fontSize: isMobile ? 11 : 12 }}
                   contentStyle={isMobile ? { fontSize: 11 } : { fontSize: 12 }}
+                  formatter={(value: any) => {
+                    if (selectedMetrics === 'spend') {
+                      return `¥${Number(value).toLocaleString()}`;
+                    } else if (selectedMetrics === 'ctr') {
+                      return `${Number(value).toFixed(2)}%`;
+                    } else {
+                      return Number(value).toLocaleString();
+                    }
+                  }}
                 />
                 <Bar 
-                  dataKey="impressions" 
-                  fill="#8884d8" 
-                  name={t('impressions')}
-                />
-                <Bar 
-                  dataKey="clicks" 
-                  fill="#82ca9d" 
-                  name={t('clicks')}
-                />
-                <Bar 
-                  dataKey="spend" 
-                  fill="#ffc658" 
-                  name={t('spend')}
+                  dataKey="value" 
+                  fill={getMetricConfig().color}
+                  name={getMetricConfig().name}
                 />
               </BarChart>
             </ResponsiveContainer>

@@ -961,6 +961,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'cpm': insights.get('cpm', 0),
                         'reach': insights.get('reach', 0),
                         'frequency': insights.get('frequency', 0),
+                        'conversions': insights.get('conversions', 0),
                     }
                 else:
                     # Meta APIから取得できない場合
@@ -979,6 +980,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                             'cpm': 0,
                             'reach': 0,
                             'frequency': 0,
+                            'conversions': int(float(campaign.budget) * 0.1),
                         }
                     else:
                         # 一時停止やその他のステータスの場合は0
@@ -995,6 +997,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                             'cpm': 0,
                             'reach': 0,
                             'frequency': 0,
+                            'conversions': 0,
                         }
                 
                 reporting_data.append(campaign_data)

@@ -1020,7 +1020,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                 # Meta APIからキャンペーンのインサイトデータを取得
                 insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
                 params = {
-                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency',
+                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
                     'time_range': '{"since":"2024-01-01","until":"2024-12-31"}',
                     'level': 'campaign'
                 }
@@ -1041,6 +1041,18 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     # インサイトデータを処理
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
+                        
+                        # コンバージョン数を抽出
+                        conversions = 0
+                        if 'actions' in insight:
+                            for action in insight['actions']:
+                                if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
+                                    conversions += int(action.get('value', 0))
+                        elif 'conversions' in insight:
+                            # conversionsフィールドがある場合
+                            for conversion in insight['conversions']:
+                                conversions += int(conversion.get('value', 0))
+                        
                         insights_dict = {
                             'spend': float(insight.get('spend', 0)),
                             'impressions': int(insight.get('impressions', 0)),
@@ -1050,6 +1062,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                             'cpm': float(insight.get('cpm', 0)),
                             'reach': int(insight.get('reach', 0)),
                             'frequency': float(insight.get('frequency', 0)),
+                            'conversions': conversions,
                         }
                         
                         # キャッシュに保存
@@ -1079,6 +1092,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                                 'cpm': 0,
                                 'reach': 0,
                                 'frequency': 0,
+                                'conversions': 0,
                             }
                         }
                 else:
@@ -2108,7 +2122,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                 # Meta APIからキャンペーンのインサイトデータを取得
                 insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
                 params = {
-                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency',
+                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
                     'time_range': '{"since":"2024-01-01","until":"2024-12-31"}',
                     'level': 'campaign'
                 }
@@ -2129,6 +2143,18 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     # インサイトデータを処理
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
+                        
+                        # コンバージョン数を抽出
+                        conversions = 0
+                        if 'actions' in insight:
+                            for action in insight['actions']:
+                                if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
+                                    conversions += int(action.get('value', 0))
+                        elif 'conversions' in insight:
+                            # conversionsフィールドがある場合
+                            for conversion in insight['conversions']:
+                                conversions += int(conversion.get('value', 0))
+                        
                         insights_dict = {
                             'spend': float(insight.get('spend', 0)),
                             'impressions': int(insight.get('impressions', 0)),
@@ -2138,6 +2164,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                             'cpm': float(insight.get('cpm', 0)),
                             'reach': int(insight.get('reach', 0)),
                             'frequency': float(insight.get('frequency', 0)),
+                            'conversions': conversions,
                         }
                         
                         # キャッシュに保存
@@ -2167,6 +2194,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                                 'cpm': 0,
                                 'reach': 0,
                                 'frequency': 0,
+                                'conversions': 0,
                             }
                         }
                 else:
@@ -2557,7 +2585,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                 # Meta APIからキャンペーンのインサイトデータを取得
                 insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
                 params = {
-                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency',
+                    'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
                     'time_range': '{"since":"2024-01-01","until":"2024-12-31"}',
                     'level': 'campaign'
                 }
@@ -2578,6 +2606,18 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     # インサイトデータを処理
                     if 'data' in insights_data and len(insights_data['data']) > 0:
                         insight = insights_data['data'][0]
+                        
+                        # コンバージョン数を抽出
+                        conversions = 0
+                        if 'actions' in insight:
+                            for action in insight['actions']:
+                                if action.get('action_type') in ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion', 'purchase', 'complete_registration', 'lead']:
+                                    conversions += int(action.get('value', 0))
+                        elif 'conversions' in insight:
+                            # conversionsフィールドがある場合
+                            for conversion in insight['conversions']:
+                                conversions += int(conversion.get('value', 0))
+                        
                         insights_dict = {
                             'spend': float(insight.get('spend', 0)),
                             'impressions': int(insight.get('impressions', 0)),
@@ -2587,6 +2627,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                             'cpm': float(insight.get('cpm', 0)),
                             'reach': int(insight.get('reach', 0)),
                             'frequency': float(insight.get('frequency', 0)),
+                            'conversions': conversions,
                         }
                         
                         # キャッシュに保存
@@ -2616,6 +2657,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                                 'cpm': 0,
                                 'reach': 0,
                                 'frequency': 0,
+                                'conversions': 0,
                             }
                         }
                 else:
