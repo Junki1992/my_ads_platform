@@ -1073,14 +1073,22 @@ class CampaignViewSet(viewsets.ModelViewSet):
             try:
                 insights = None
                 
-                # 日付範囲が指定されている場合は、Meta APIから取得したデータを優先
-                if campaign.id in insights_dict:
-                    insights = insights_dict[campaign.id]
-                    logger.info(f"Campaign {campaign.id} ({campaign.name}): Using Meta API data, conversions: {insights.get('conversions', 0)}")
-                # Meta APIから取得できない場合はキャッシュを使用
-                elif campaign.cached_insights:
-                    insights = campaign.cached_insights
-                    logger.info(f"Campaign {campaign.id} ({campaign.name}): Using cached data, conversions: {insights.get('conversions', 0)}")
+                # 日付範囲が指定されている場合は、Meta APIから取得したデータのみを使用（キャッシュは使わない）
+                if start_date_str and end_date_str:
+                    if campaign.id in insights_dict:
+                        insights = insights_dict[campaign.id]
+                        logger.info(f"Campaign {campaign.id} ({campaign.name}): Using Meta API data (date range: {start_date_str} to {end_date_str}), conversions: {insights.get('conversions', 0)}")
+                    else:
+                        # 日付範囲が指定されているが、Meta APIから取得できない場合は0を返す
+                        logger.info(f"Campaign {campaign.id} ({campaign.name}): Date range specified but no Meta API data available, using 0")
+                else:
+                    # 日付範囲が指定されていない場合は、Meta APIから取得したデータを優先、なければキャッシュを使用
+                    if campaign.id in insights_dict:
+                        insights = insights_dict[campaign.id]
+                        logger.info(f"Campaign {campaign.id} ({campaign.name}): Using Meta API data, conversions: {insights.get('conversions', 0)}")
+                    elif campaign.cached_insights:
+                        insights = campaign.cached_insights
+                        logger.info(f"Campaign {campaign.id} ({campaign.name}): Using cached data, conversions: {insights.get('conversions', 0)}")
                 
                 # データが取得できた場合（Meta APIまたはキャッシュ）
                 if insights:
