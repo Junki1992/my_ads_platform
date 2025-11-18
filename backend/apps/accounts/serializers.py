@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import User, MetaAccount
+from .models import User, MetaAccount, BoxAccount
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -80,4 +80,16 @@ class MetaAccountSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
             'access_token': {'write_only': True}  # セキュリティのため読み取り時は返さない
+        }
+
+
+class BoxAccountSerializer(serializers.ModelSerializer):
+    """Box アカウントシリアライザー"""
+    class Meta:
+        model = BoxAccount
+        fields = ['id', 'account_id', 'account_name', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'access_token': {'write_only': True},  # セキュリティのため読み取り時は返さない
+            'refresh_token': {'write_only': True}
         }

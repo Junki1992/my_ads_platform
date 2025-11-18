@@ -45,6 +45,7 @@ import {
 } from '@ant-design/icons';
 import campaignService from '../services/campaignService';
 import metaAccountService from '../services/metaAccountService';
+import boxAccountService, { BoxAccount, BoxFile } from '../services/boxAccountService';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -61,6 +62,11 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<any[]>([]);
   const [selectedMetaAccount, setSelectedMetaAccount] = useState<number | null>(null);
+  const [boxAccounts, setBoxAccounts] = useState<BoxAccount[]>([]);
+  const [boxFilesModalVisible, setBoxFilesModalVisible] = useState(false);
+  const [selectedBoxAccount, setSelectedBoxAccount] = useState<number | null>(null);
+  const [boxFiles, setBoxFiles] = useState<BoxFile[]>([]);
+  const [loadingBoxFiles, setLoadingBoxFiles] = useState(false);
 
   // 画面サイズの検出
   useEffect(() => {
@@ -699,6 +705,31 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                 <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
                   推奨サイズ：1080×1080px以上
                 </div>
+                <div style={{ marginTop: 8 }}>
+                  <Button 
+                    type="dashed" 
+                    onClick={async () => {
+                      try {
+                        const accounts = await boxAccountService.fetchBoxAccounts();
+                        setBoxAccounts(accounts);
+                        if (accounts.length === 0) {
+                          message.warning('Boxアカウントが登録されていません。設定ページでBoxアカウントを連携してください。');
+                          return;
+                        }
+                        setBoxFilesModalVisible(true);
+                        if (accounts.length === 1) {
+                          setSelectedBoxAccount(accounts[0].id);
+                          await loadBoxFiles(accounts[0].id);
+                        }
+                      } catch (error) {
+                        console.error('Failed to fetch Box accounts:', error);
+                        message.error('Boxアカウントの取得に失敗しました');
+                      }
+                    }}
+                  >
+                    Boxから選択
+                  </Button>
+                </div>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -1085,6 +1116,61 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
   const [submissionResult, setSubmissionResult] = useState<any>(null);
   const [showSubmissionDetails, setShowSubmissionDetails] = useState(false);
 
+  // Boxファイルを読み込む関数
+  const loadBoxFiles = async (boxAccountId: number) => {
+    setLoadingBoxFiles(true);
+    try {
+      const response = await boxAccountService.listFiles(boxAccountId);
+      setBoxFiles(response.files);
+    } catch (error) {
+      console.error('Failed to load Box files:', error);
+      message.error('Boxファイルの取得に失敗しました');
+    } finally {
+      setLoadingBoxFiles(false);
+    }
+  };
+
+  // Boxファイル選択時の処理
+  const handleBoxFileSelect = async (file: BoxFile) => {
+    if (!selectedBoxAccount) {
+      message.error('Boxアカウントが選択されていません');
+      return;
+    }
+
+    try {
+      // BoxファイルをダウンロードしてBlobに変換
+      const blob = await boxAccountService.downloadFile(selectedBoxAccount, file.id);
+      
+      // BlobをFileオブジェクトに変換
+      const fileObj = new File([blob], file.name, { type: blob.type || 'image/jpeg' });
+      
+      // プレビュー用URLを作成
+      const previewUrl = URL.createObjectURL(fileObj);
+      setPreviewImages([previewUrl]);
+      
+      // フォームフィールドに設定
+      form.setFieldValue('image_upload', [{
+        uid: file.id,
+        name: file.name,
+        status: 'done',
+        url: previewUrl,
+        originFileObj: fileObj,
+        box_file_id: file.id,
+        box_account_id: selectedBoxAccount
+      }]);
+      
+      // フォームにBox情報を保存（送信時に使用）
+      form.setFieldValue('box_file_id', file.id);
+      form.setFieldValue('box_account_id', selectedBoxAccount);
+      
+      setBoxFilesModalVisible(false);
+      message.success('Boxファイルを選択しました');
+    } catch (error) {
+      console.error('Failed to select Box file:', error);
+      message.error('Boxファイルの選択に失敗しました');
+    }
+  };
+
   // 画像をBase64に変換する関数（同期的バージョン）
   const convertImageToBase64Sync = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -1265,6 +1351,10 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
         message.warning('画像ファイルが読み込まれませんでした。ウェブサイトのサムネイルが使用される可能性があります。');
       }
 
+      // Boxファイル情報を取得
+      const boxFileId = formValues.box_file_id;
+      const boxAccountId = formValues.box_account_id;
+      
       const campaignData = {
         name: finalValues.campaign_name,
         objective: finalValues.objective,
@@ -1281,7 +1371,10 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
         website_url: finalValues.website_url,
         facebook_page_id: finalValues.facebook_page_id,
         // ファイルデータをクリエイティブフィールドに追加（FormData形式）
-        image_file: imageFile || undefined
+        image_file: imageFile || undefined,
+        // Boxファイル情報（Boxから選択した場合）
+        box_file_id: boxFileId || undefined,
+        box_account_id: boxAccountId || undefined
       };
       
       console.log('=== Campaign Data Debug ===');
@@ -1685,6 +1778,83 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
 
       {/* 投稿結果詳細モーダル */}
       <SubmissionDetailsModal />
+
+      {/* Boxファイル選択モーダル */}
+      <Modal
+        title="Boxから画像を選択"
+        open={boxFilesModalVisible}
+        onCancel={() => {
+          setBoxFilesModalVisible(false);
+          setBoxFiles([]);
+          setSelectedBoxAccount(null);
+        }}
+        footer={null}
+        width={800}
+      >
+        {boxAccounts.length > 1 && (
+          <div style={{ marginBottom: 16 }}>
+            <Text strong>Boxアカウント:</Text>
+            <Select
+              style={{ width: 300, marginLeft: 8 }}
+              placeholder="Boxアカウントを選択"
+              value={selectedBoxAccount}
+              onChange={async (value) => {
+                setSelectedBoxAccount(value);
+                await loadBoxFiles(value);
+              }}
+            >
+              {boxAccounts.map(account => (
+                <Option key={account.id} value={account.id}>
+                  {account.account_name}
+                </Option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        {loadingBoxFiles ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Progress type="circle" />
+            <div style={{ marginTop: 16 }}>Boxファイルを読み込んでいます...</div>
+          </div>
+        ) : boxFiles.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Text type="secondary">画像ファイルが見つかりませんでした</Text>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 16 }}>
+            {boxFiles.map(file => (
+              <div
+                key={file.id}
+                style={{
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 4,
+                  padding: 8,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#1890ff';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#d9d9d9';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+                onClick={() => handleBoxFileSelect(file)}
+              >
+                <div style={{ fontSize: 12, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {file.name}
+                </div>
+                <div style={{ fontSize: 10, color: '#999' }}>
+                  {(file.size / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

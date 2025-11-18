@@ -4,16 +4,18 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db import transaction
+from django.shortcuts import redirect
 import logging
 import requests
 
-from .models import User, MetaAccount
+from .models import User, MetaAccount, BoxAccount
 from .serializers import (
     UserSerializer,
     UserRegisterSerializer,
     UserLoginSerializer,
     ChangePasswordSerializer,
-    MetaAccountSerializer
+    MetaAccountSerializer,
+    BoxAccountSerializer
 )
 from .two_factor import TwoFactorAuthService
 from .two_factor_serializers import (
@@ -871,4 +873,242 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             logger.error(f"Fetch accounts error: {str(e)}")
             return Response({
                 'error': f'Failed to fetch accounts: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class BoxAccountViewSet(viewsets.ModelViewSet):
+    """Box アカウント管理ViewSet"""
+    serializer_class = BoxAccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """自分のBoxアカウントのみ取得可能"""
+        return BoxAccount.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        """Boxアカウント作成時にユーザーを自動設定"""
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def oauth_authorize(self, request):
+        """Box OAuth認証URLを生成"""
+        from django.conf import settings
+        import secrets
+        import jwt
+        from datetime import datetime, timedelta
+        
+        # ランダムなstateパラメータを生成（CSRF攻撃防止）
+        state = secrets.token_urlsafe(32)
+        
+        # JWTトークンでstateをエンコード（セッションの代わり）
+        jwt_secret = getattr(settings, 'SECRET_KEY', 'fallback-secret')
+        payload = {
+            'state': state,
+            'user_id': request.user.id,
+            'exp': datetime.utcnow() + timedelta(minutes=10)  # 10分で有効期限切れ
+        }
+        encoded_state = jwt.encode(payload, jwt_secret, algorithm='HS256')
+        
+        # Box App設定を取得
+        client_id = getattr(settings, 'BOX_CLIENT_ID', None)
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        
+        if not client_id:
+            logger.error("BOX_CLIENT_ID is not configured in settings")
+            return Response({
+                'error': 'Box Client IDが設定されていません。管理者に連絡してください。'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Box OAuth認証URLを生成
+        redirect_uri = f"{frontend_url}/settings?box_oauth_callback=1"
+        auth_url = (
+            f"https://account.box.com/api/oauth2/authorize?"
+            f"response_type=code&"
+            f"client_id={client_id}&"
+            f"redirect_uri={redirect_uri}&"
+            f"state={encoded_state}"
+        )
+        
+        logger.info(f"Box OAuth authorization URL generated for user: {request.user.email}")
+        
+        return Response({
+            'auth_url': auth_url,
+            'state': encoded_state
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['get'])
+    def oauth_callback(self, request):
+        """Box OAuth認証コールバック"""
+        from django.conf import settings
+        import jwt
+        
+        code = request.query_params.get('code')
+        state = request.query_params.get('state')
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        
+        if not code or not state:
+            logger.error("Box OAuth callback missing code or state")
+            return redirect(f"{frontend_url}/settings?error=box_oauth_missing_params")
+        
+        try:
+            # JWTトークンからstateを検証
+            jwt_secret = getattr(settings, 'SECRET_KEY', 'fallback-secret')
+            decoded = jwt.decode(state, jwt_secret, algorithms=['HS256'])
+            user_id = decoded.get('user_id')
+            
+            # ユーザーを取得
+            user = User.objects.get(id=user_id)
+            
+            # Box APIでアクセストークンを取得
+            client_id = getattr(settings, 'BOX_CLIENT_ID', None)
+            client_secret = getattr(settings, 'BOX_CLIENT_SECRET', None)
+            redirect_uri = f"{frontend_url}/settings?box_oauth_callback=1"
+            
+            if not client_id or not client_secret:
+                logger.error("Box credentials not configured")
+                return redirect(f"{frontend_url}/settings?error=box_credentials_not_configured")
+            
+            # トークン交換
+            token_url = "https://api.box.com/oauth2/token"
+            token_data = {
+                'grant_type': 'authorization_code',
+                'code': code,
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'redirect_uri': redirect_uri
+            }
+            
+            token_response = requests.post(token_url, data=token_data)
+            token_data_response = token_response.json()
+            
+            if 'access_token' not in token_data_response:
+                error_message = token_data_response.get('error_description', 'Token exchange failed')
+                logger.error(f"Box token exchange failed: {error_message}")
+                return redirect(f"{frontend_url}/settings?error=box_token_exchange_failed&message={error_message}")
+            
+            access_token = token_data_response['access_token']
+            refresh_token = token_data_response.get('refresh_token', '')
+            
+            # Box APIでユーザー情報を取得
+            user_info_url = "https://api.box.com/2.0/users/me"
+            headers = {'Authorization': f'Bearer {access_token}'}
+            user_info_response = requests.get(user_info_url, headers=headers)
+            user_info = user_info_response.json()
+            
+            if 'id' not in user_info:
+                logger.error("Failed to fetch Box user info")
+                return redirect(f"{frontend_url}/settings?error=box_user_info_failed")
+            
+            # Boxアカウントを保存または更新
+            account_id = str(user_info['id'])
+            account_name = user_info.get('name', 'Box User')
+            
+            box_account, created = BoxAccount.objects.update_or_create(
+                user=user,
+                account_id=account_id,
+                defaults={
+                    'account_name': account_name,
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'is_active': True
+                }
+            )
+            
+            logger.info(f"Box OAuth authentication successful for user: {user.email}, account: {account_name}")
+            
+            return redirect(f"{frontend_url}/settings?success=box_oauth_success&account_id={box_account.id}")
+            
+        except jwt.ExpiredSignatureError:
+            logger.error("Box OAuth state token expired")
+            return redirect(f"{frontend_url}/settings?error=box_oauth_expired")
+        except jwt.InvalidTokenError:
+            logger.error("Box OAuth invalid state token")
+            return redirect(f"{frontend_url}/settings?error=box_oauth_invalid")
+        except Exception as e:
+            logger.error(f"Box OAuth callback error: {str(e)}")
+            return redirect(f"{frontend_url}/settings?error=box_oauth_callback_error&message={str(e)}")
+    
+    @action(detail=True, methods=['get'])
+    def list_files(self, request, pk=None):
+        """Boxアカウントのファイル一覧を取得"""
+        from boxsdk import Client, OAuth2
+        
+        box_account = self.get_object()
+        
+        try:
+            # Box SDKでクライアントを作成
+            oauth2 = OAuth2(
+                client_id='',  # 使用しない（既にトークンがある）
+                client_secret='',
+                access_token=box_account.access_token
+            )
+            client = Client(oauth2)
+            
+            # ルートフォルダのファイル一覧を取得
+            folder_id = '0'  # ルートフォルダ
+            items = client.folder(folder_id).get_items(limit=100)
+            
+            files = []
+            for item in items:
+                if item.type == 'file':
+                    # 画像ファイルのみフィルタリング
+                    file_ext = item.name.lower().split('.')[-1] if '.' in item.name else ''
+                    if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
+                        files.append({
+                            'id': item.id,
+                            'name': item.name,
+                            'size': item.size,
+                            'modified_at': item.modified_at.isoformat() if item.modified_at else None,
+                            'download_url': f"/api/accounts/box-accounts/{box_account.id}/download-file/{item.id}/"
+                        })
+            
+            logger.info(f"Fetched {len(files)} files from Box for user: {request.user.email}")
+            
+            return Response({
+                'files': files
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Box list files error: {str(e)}")
+            return Response({
+                'error': f'Failed to list files: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'], url_path='download-file/(?P<file_id>[^/.]+)')
+    def download_file(self, request, pk=None, file_id=None):
+        """Boxからファイルをダウンロード"""
+        from boxsdk import Client, OAuth2
+        from django.http import HttpResponse
+        import io
+        
+        box_account = self.get_object()
+        
+        try:
+            # Box SDKでクライアントを作成
+            oauth2 = OAuth2(
+                client_id='',
+                client_secret='',
+                access_token=box_account.access_token
+            )
+            client = Client(oauth2)
+            
+            # ファイルをダウンロード
+            file_content = client.file(file_id).content()
+            
+            # ファイル情報を取得
+            file_info = client.file(file_id).get()
+            file_name = file_info.name
+            
+            # レスポンスを作成
+            response = HttpResponse(file_content, content_type='application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+            
+            logger.info(f"Downloaded file {file_name} from Box for user: {request.user.email}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Box download file error: {str(e)}")
+            return Response({
+                'error': f'Failed to download file: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

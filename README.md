@@ -27,6 +27,11 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - ✅ 広告アカウント一覧取得
 - ✅ 削除時のパスワード確認（セキュリティ強化）
 
+### Box連携
+- ✅ Box OAuth 2.0認証
+- ✅ Boxファイル一覧取得
+- ✅ Boxからクリエイティブ画像を選択して入稿
+
 ### その他
 - ✅ アラート機能
 - 🚧 レポート機能
@@ -74,6 +79,7 @@ cp env.example .env
 - `JWT_SECRET_KEY`: JWT トークン用シークレットキー
 - `META_APP_ID`, `META_APP_SECRET`: Meta API認証情報（プラットフォーム共通）
 - `META_ACCESS_TOKEN`: Meta長期アクセストークン（オプション）
+- `BOX_CLIENT_ID`, `BOX_CLIENT_SECRET`: Box API認証情報（Box連携を使用する場合）
 - `FRONTEND_URL`: フロントエンドURL（OAuth認証時のリダイレクト先）
 - `ALLOWED_HOSTS`: 許可するホスト名（カンマ区切り）
 - `REDIS_URL`: Redis接続URL
@@ -121,6 +127,17 @@ npm start
 ```
 
 ## API エンドポイント
+
+### Box連携
+
+- `GET /api/accounts/box-accounts/` - Boxアカウント一覧取得
+- `GET /api/accounts/box-accounts/oauth_authorize/` - Box OAuth認証URL取得
+- `GET /api/accounts/box-accounts/oauth_callback/` - Box OAuth認証コールバック
+- `GET /api/accounts/box-accounts/{id}/list_files/` - Boxファイル一覧取得
+- `GET /api/accounts/box-accounts/{id}/download-file/{file_id}/` - Boxファイルダウンロード
+- `DELETE /api/accounts/box-accounts/{id}/` - Boxアカウント削除
+
+### Metaアカウント管理
 
 ### 認証
 - `POST /api/accounts/auth/register/` - ユーザー登録

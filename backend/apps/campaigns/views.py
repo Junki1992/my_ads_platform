@@ -158,6 +158,62 @@ class CampaignViewSet(viewsets.ModelViewSet):
         logger.info(f"Request data keys: {list(request_data.keys())}")
         logger.info(f"Request FILES: {list(self.request.FILES.keys()) if hasattr(self.request, 'FILES') else 'No FILES'}")
         
+        # BoxファイルIDが指定されている場合はBoxからダウンロード
+        box_file_id = request_data.get('box_file_id')
+        box_account_id = request_data.get('box_account_id')
+        
+        if box_file_id and box_account_id:
+            try:
+                from apps.accounts.models import BoxAccount
+                from boxsdk import Client, OAuth2
+                import os
+                
+                # Boxアカウントを取得
+                box_account = BoxAccount.objects.get(id=box_account_id, user=self.request.user)
+                
+                # Box SDKでクライアントを作成
+                oauth2 = OAuth2(
+                    client_id='',
+                    client_secret='',
+                    access_token=box_account.access_token
+                )
+                client = Client(oauth2)
+                
+                # ファイルをダウンロード
+                file_content = client.file(box_file_id).content()
+                file_info = client.file(box_file_id).get()
+                file_name = file_info.name
+                
+                # ファイルを保存
+                username = campaign.user.username or campaign.user.id
+                filename = file_name or 'box_image.jpg'
+                file_path = f"creative/{username}/{campaign.campaign_id}/{filename}"
+                
+                # ディレクトリが存在しない場合は作成
+                full_dir = os.path.join(settings.MEDIA_ROOT, f"creative/{username}/{campaign.campaign_id}/")
+                os.makedirs(full_dir, exist_ok=True)
+                
+                # ファイルに保存
+                full_file_path = os.path.join(full_dir, filename)
+                with open(full_file_path, 'wb') as f:
+                    f.write(file_content)
+                
+                creative_data = {
+                    'image_url': f"/media/{file_path}",
+                    'image_file_path': file_path,
+                    'original_filename': file_name,
+                    'file_size': file_info.size,
+                    'file_type': 'image/jpeg',  # Boxから取得したファイルタイプ
+                    'source': 'box',
+                    'box_file_id': box_file_id
+                }
+                
+                logger.info(f"Box file downloaded and processed for campaign {campaign.id}: {creative_data['image_url']}")
+                
+            except Exception as e:
+                logger.error(f"Error processing Box file: {str(e)}")
+                creative_data = {'error': f'Box file processing failed: {str(e)}'}
+        
         # FormDataからファイルオブジェクトを取得
         image_file = self.request.FILES.get('image_file')
         logger.info(f"image_file received: {bool(image_file)}")

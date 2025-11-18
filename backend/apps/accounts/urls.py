@@ -7,6 +7,7 @@ router = DefaultRouter()
 router.register(r'auth', views.AuthViewSet, basename='auth')
 router.register(r'users', views.UserViewSet, basename='user')
 router.register(r'meta-accounts', views.MetaAccountViewSet, basename='meta-account')
+router.register(r'box-accounts', views.BoxAccountViewSet, basename='box-account')
 
 urlpatterns = [
     path('', include(router.urls)),

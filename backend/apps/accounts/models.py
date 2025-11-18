@@ -35,3 +35,20 @@ class MetaAccount(models.Model):
     class Meta:
         verbose_name = _('Meta Account')
         verbose_name_plural = _('Meta Accounts')
+
+
+class BoxAccount(models.Model):
+    """Boxアカウント"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='box_accounts')
+    account_id = models.CharField(max_length=100)  # Box user ID
+    account_name = models.CharField(max_length=200)  # Box user name
+    access_token = models.TextField()  # OAuth access token
+    refresh_token = models.TextField(blank=True)  # OAuth refresh token
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Box Account')
+        verbose_name_plural = _('Box Accounts')
+        unique_together = [['user', 'account_id']]
