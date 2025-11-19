@@ -3,8 +3,9 @@ import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Modal
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
+import boxAccountService, { BoxAccount } from '../services/boxAccountService';
 import twoFactorService from '../services/twoFactorService';
-import { EditOutlined, DeleteOutlined, SaveOutlined, SwapOutlined, PlusOutlined, CheckCircleOutlined, SafetyOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, SaveOutlined, SwapOutlined, PlusOutlined, CheckCircleOutlined, SafetyOutlined, CloudOutlined } from '@ant-design/icons';
 import TwoFactorSetup from '../components/TwoFactorSetup';
 import TwoFactorDisable from '../components/TwoFactorDisable';
 
@@ -26,6 +27,7 @@ const Settings: React.FC = () => {
   const [metaAccountForm] = Form.useForm();
   const [tokenExchangeForm] = Form.useForm();
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
+  const [boxAccounts, setBoxAccounts] = useState<BoxAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<MetaAccount | null>(null);
@@ -90,23 +92,33 @@ const Settings: React.FC = () => {
     
     loadUserSettings();
     loadMetaAccounts();
+    loadBoxAccounts();
     loadTwoFactorStatus();
     
     // URLパラメータからOAuth結果をチェック
     const urlParams = new URLSearchParams(window.location.search);
     const success = urlParams.get('success');
-    const error = urlParams.get('error');
+    const errorParam = urlParams.get('error');
     const accounts = urlParams.get('accounts');
-    const message = urlParams.get('message');
+    const messageParam = urlParams.get('message');
     
     if (success === 'oauth_success') {
-      // OAuth認証成功
+      // Meta OAuth認証成功
       loadMetaAccounts(); // アカウント一覧を再読み込み
       // URLパラメータをクリア
       window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (error) {
+    } else if (success === 'box_oauth_success') {
+      // Box OAuth認証成功
+      loadBoxAccounts(); // Boxアカウント一覧を再読み込み
+      message.success('Boxアカウントの連携に成功しました');
+      // URLパラメータをクリア
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (errorParam) {
       // OAuth認証エラー
-      console.error('OAuth error:', error, message);
+      console.error('OAuth error:', errorParam, messageParam);
+      if (errorParam.startsWith('box_')) {
+        message.error('Boxアカウントの連携に失敗しました');
+      }
       // URLパラメータをクリア
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -127,6 +139,37 @@ const Settings: React.FC = () => {
       setMetaAccounts(accounts);
     } catch (error) {
       console.error('Failed to load Meta accounts:', error);
+    }
+  };
+
+  const loadBoxAccounts = async () => {
+    try {
+      const accounts = await boxAccountService.fetchBoxAccounts();
+      setBoxAccounts(accounts);
+    } catch (error) {
+      console.error('Failed to load Box accounts:', error);
+    }
+  };
+
+  const handleBoxOAuthLogin = async () => {
+    try {
+      const response = await boxAccountService.getOAuthUrl();
+      window.location.href = response.auth_url;
+    } catch (error: any) {
+      console.error('Failed to get Box OAuth URL:', error);
+      message.error('Box認証URLの取得に失敗しました');
+    }
+  };
+
+  const handleDeleteBoxAccount = async (accountId: number) => {
+    try {
+      await boxAccountService.deleteBoxAccount(accountId);
+      message.success('Boxアカウントを削除しました');
+      loadBoxAccounts();
+    } catch (error: any) {
+      console.error('Failed to delete Box account:', error);
+      const errorMessage = error.response?.data?.error || 'Boxアカウントの削除に失敗しました';
+      message.error(errorMessage);
     }
   };
 
@@ -626,6 +669,102 @@ const Settings: React.FC = () => {
           dataSource={metaAccounts}
           rowKey="id"
           pagination={{ pageSize: 5 }}
+        />
+      </Card>
+
+      <Card 
+        title={
+          <Space>
+            <CloudOutlined />
+            <span>Boxアカウント管理</span>
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        <Alert
+          message="Boxアカウント連携について"
+          description={
+            <div>
+              <p>Boxアカウントを連携することで、広告入稿時にBoxから直接画像を選択できます。</p>
+              <p style={{ color: '#ff4d4f', fontWeight: 'bold', marginTop: 8 }}>
+                <strong>注意: Boxアカウントの連携にはBox for Developersでのアプリ登録が必要です</strong>
+              </p>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        
+        <div style={{ marginBottom: 16, textAlign: 'right' }}>
+          <Button 
+            type="primary"
+            icon={<CloudOutlined />}
+            onClick={handleBoxOAuthLogin}
+            style={{ backgroundColor: '#0061d5', borderColor: '#0061d5' }}
+          >
+            <span className="button-text">Boxアカウントを連携</span>
+          </Button>
+        </div>
+
+        <Table
+          columns={[
+            {
+              title: 'アカウント名',
+              dataIndex: 'account_name',
+              key: 'account_name',
+            },
+            {
+              title: 'アカウントID',
+              dataIndex: 'account_id',
+              key: 'account_id',
+            },
+            {
+              title: 'ステータス',
+              dataIndex: 'is_active',
+              key: 'is_active',
+              render: (isActive: boolean) => (
+                <span style={{ color: isActive ? 'green' : 'red' }}>
+                  {isActive ? '有効' : '無効'}
+                </span>
+              ),
+            },
+            {
+              title: '作成日',
+              dataIndex: 'created_at',
+              key: 'created_at',
+              render: (date: string) => new Date(date).toLocaleDateString(i18n.language === 'ja' ? 'ja-JP' : 'en-US'),
+            },
+            {
+              title: '操作',
+              key: 'action',
+              render: (_: any, record: BoxAccount) => (
+                <Space>
+                  <Button 
+                    type="link" 
+                    danger 
+                    icon={<DeleteOutlined />}
+                    onClick={() => {
+                      Modal.confirm({
+                        title: 'Boxアカウントの削除',
+                        content: `「${record.account_name}」を削除してもよろしいですか？`,
+                        okText: '削除',
+                        cancelText: 'キャンセル',
+                        okType: 'danger',
+                        onOk: () => handleDeleteBoxAccount(record.id),
+                      });
+                    }}
+                  >
+                    削除
+                  </Button>
+                </Space>
+              ),
+            },
+          ]}
+          dataSource={boxAccounts}
+          rowKey="id"
+          pagination={{ pageSize: 5 }}
+          locale={{ emptyText: 'Boxアカウントが登録されていません' }}
         />
       </Card>
 

@@ -20,17 +20,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const initAuth = async () => {
+      try {
       const storedUser = authService.getStoredUser();
       if (storedUser && authService.isAuthenticated()) {
         try {
-          const currentUser = await authService.getCurrentUser();
+            // タイムアウトを5秒に設定
+            const timeoutPromise = new Promise<User>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 5000)
+            );
+            const currentUser = await Promise.race([
+              authService.getCurrentUser(),
+              timeoutPromise
+            ]);
           setUser(currentUser);
         } catch (error) {
           console.error('Failed to fetch user:', error);
-          authService.logout();
+            // エラーが発生した場合は認証情報をクリア
+            try {
+              await authService.logout();
+            } catch (logoutError) {
+              // ログアウトエラーは無視
+              console.error('Logout error:', logoutError);
+            }
+            setUser(null);
+          }
         }
+      } finally {
+        // 必ずローディングを終了
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAuth();

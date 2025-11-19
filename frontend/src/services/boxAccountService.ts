@@ -15,6 +15,7 @@ export interface BoxFile {
   size: number;
   modified_at: string | null;
   download_url: string;
+  thumbnail_url?: string;
 }
 
 class BoxAccountService {
@@ -52,6 +53,12 @@ class BoxAccountService {
       `/accounts/box-accounts/${boxAccountId}/download-file/${fileId}/`,
       { responseType: 'blob' }
     );
+    return response.data;
+  }
+
+  // Boxアカウントのアクセストークンを取得（Content Picker用）
+  async getAccessToken(boxAccountId: number): Promise<{ access_token: string; account_id: string; account_name: string }> {
+    const response = await api.get(`/accounts/box-accounts/${boxAccountId}/get_access_token/`);
     return response.data;
   }
 }

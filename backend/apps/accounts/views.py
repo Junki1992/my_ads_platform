@@ -5,6 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db import transaction
 from django.shortcuts import redirect
+from django.conf import settings
 import logging
 import requests
 
@@ -137,11 +138,19 @@ class AuthViewSet(viewsets.GenericViewSet):
                     }
                 }, status=status.HTTP_200_OK)
             else:
+                # 認証失敗
+                logger.warning(f"Login failed for email: {email} - Invalid credentials")
                 return Response({
-                    'error': 'Invalid email or password'
+                    'error': 'メールアドレスまたはパスワードが正しくありません',
+                    'detail': 'Invalid email or password'
                 }, status=status.HTTP_401_UNAUTHORIZED)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # バリデーションエラー
+        logger.warning(f"Login validation failed: {serializer.errors}")
+        return Response({
+            'error': '入力データが正しくありません',
+            'detail': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def logout(self, request):
@@ -881,9 +890,50 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
     serializer_class = BoxAccountSerializer
     permission_classes = [permissions.IsAuthenticated]
     
+    def get_permissions(self):
+        """oauth_callbackとthumbnailは認証不要（画像タグからのリクエストのため）"""
+        if self.action in ['oauth_callback', 'thumbnail']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+    
     def get_queryset(self):
         """自分のBoxアカウントのみ取得可能"""
         return BoxAccount.objects.filter(user=self.request.user)
+    
+    def _ensure_box_access_token(self, box_account):
+        """必要に応じてBoxアクセストークンを更新"""
+        client_id = getattr(settings, 'BOX_CLIENT_ID', None)
+        client_secret = getattr(settings, 'BOX_CLIENT_SECRET', None)
+        
+        if not client_id or not client_secret:
+            raise Exception("Boxアプリのクライアント情報が設定されていません")
+        
+        # アクセストークンが存在し、まだ有効な場合はそのまま返す（有効期限チェックは省略し、常にリフレッシュしてもよい）
+        if box_account.access_token and box_account.refresh_token:
+            # Box APIにアクセスして401が返るケースがあるため、常にリフレッシュ
+            pass
+        elif not box_account.refresh_token:
+            raise Exception("Boxアカウントにリフレッシュトークンが保存されていません")
+        
+        token_url = "https://api.box.com/oauth2/token"
+        token_data = {
+            'grant_type': 'refresh_token',
+            'refresh_token': box_account.refresh_token,
+            'client_id': client_id,
+            'client_secret': client_secret
+        }
+        
+        response = requests.post(token_url, data=token_data)
+        data = response.json()
+        
+        if response.status_code != 200 or 'access_token' not in data:
+            error_message = data.get('error_description', data.get('error', 'Token refresh failed'))
+            raise Exception(error_message)
+        
+        box_account.access_token = data['access_token']
+        box_account.refresh_token = data.get('refresh_token', box_account.refresh_token)
+        box_account.save(update_fields=['access_token', 'refresh_token', 'updated_at'])
+        return box_account.access_token
     
     def perform_create(self, serializer):
         """Boxアカウント作成時にユーザーを自動設定"""
@@ -920,13 +970,21 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Box OAuth認証URLを生成
-        redirect_uri = f"{frontend_url}/settings?box_oauth_callback=1"
+        redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/box-accounts/oauth_callback/"
+        # URLエンコード
+        from urllib.parse import quote
+        redirect_uri_encoded = quote(redirect_uri, safe='')
+        
+        # Box OAuth認証に必要なスコープを指定
+        scope = 'root_readwrite'  # ファイル読み書き権限
+        
         auth_url = (
             f"https://account.box.com/api/oauth2/authorize?"
             f"response_type=code&"
             f"client_id={client_id}&"
-            f"redirect_uri={redirect_uri}&"
-            f"state={encoded_state}"
+            f"redirect_uri={redirect_uri_encoded}&"
+            f"state={encoded_state}&"
+            f"scope={scope}"
         )
         
         logger.info(f"Box OAuth authorization URL generated for user: {request.user.email}")
@@ -962,7 +1020,7 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
             # Box APIでアクセストークンを取得
             client_id = getattr(settings, 'BOX_CLIENT_ID', None)
             client_secret = getattr(settings, 'BOX_CLIENT_SECRET', None)
-            redirect_uri = f"{frontend_url}/settings?box_oauth_callback=1"
+            redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/box-accounts/oauth_callback/"
             
             if not client_id or not client_secret:
                 logger.error("Box credentials not configured")
@@ -1029,50 +1087,537 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
             return redirect(f"{frontend_url}/settings?error=box_oauth_callback_error&message={str(e)}")
     
     @action(detail=True, methods=['get'])
+    def get_access_token(self, request, pk=None):
+        """Boxアカウントのアクセストークンを取得（Content Picker用）"""
+        box_account = self.get_object()
+        try:
+            access_token = self._ensure_box_access_token(box_account)
+            return Response({
+                'access_token': access_token,
+                'account_id': box_account.account_id,
+                'account_name': box_account.account_name
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Failed to refresh Box access token: {str(e)}")
+            return Response({'error': 'Boxアクセストークンの更新に失敗しました。Boxアカウントを再連携してください。'},
+                            status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
     def list_files(self, request, pk=None):
         """Boxアカウントのファイル一覧を取得"""
         from boxsdk import Client, OAuth2
+        from django.core.cache import cache
+        from django.utils import timezone
+        import json
         
         box_account = self.get_object()
         
+        # キャッシュキーを生成（BoxアカウントIDと最終更新日時を含める）
+        cache_key = f"box_files_{box_account.id}_{box_account.updated_at.timestamp()}"
+        
+        # キャッシュから取得を試みる（5分間キャッシュ）
+        cached_files = cache.get(cache_key)
+        if cached_files is not None:
+            logger.info(f"Returning cached file list for Box account {box_account.id} ({len(cached_files)} files)")
+            return Response({
+                'files': cached_files,
+                'total_count': len(cached_files),
+                'cached': True
+            }, status=status.HTTP_200_OK)
+        
         try:
+            # アクセストークンを確認・必要に応じて更新
+            try:
+                self._ensure_box_access_token(box_account)
+            except Exception as token_error:
+                error_msg = str(token_error)
+                logger.error(f"Failed to refresh Box access token for list_files: {error_msg}")
+                
+                # リフレッシュトークンが期限切れの場合は、再認証が必要
+                if 'expired' in error_msg.lower() or 'invalid' in error_msg.lower():
+                    logger.error(f"Box refresh token has expired for account {box_account.id}. Re-authentication required.")
+                    return Response({
+                        'error': 'Boxアカウントの認証が期限切れです。設定画面でBoxアカウントを再連携してください。',
+                        'details': 'Refresh token has expired',
+                        'requires_reauth': True
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+                else:
+                    return Response({
+                        'error': f'Boxアクセストークンの更新に失敗しました: {error_msg}',
+                        'details': error_msg
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
             # Box SDKでクライアントを作成
             oauth2 = OAuth2(
-                client_id='',  # 使用しない（既にトークンがある）
-                client_secret='',
-                access_token=box_account.access_token
+                client_id=getattr(settings, 'BOX_CLIENT_ID', ''),
+                client_secret=getattr(settings, 'BOX_CLIENT_SECRET', ''),
+                access_token=box_account.access_token,
+                refresh_token=box_account.refresh_token
             )
             client = Client(oauth2)
             
-            # ルートフォルダのファイル一覧を取得
+            # ルートフォルダと1階層のサブフォルダから画像・動画ファイルを取得（すべてのファイルを取得）
             folder_id = '0'  # ルートフォルダ
-            items = client.folder(folder_id).get_items(limit=100)
-            
             files = []
-            for item in items:
-                if item.type == 'file':
-                    # 画像ファイルのみフィルタリング
-                    file_ext = item.name.lower().split('.')[-1] if '.' in item.name else ''
-                    if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
-                        files.append({
-                            'id': item.id,
-                            'name': item.name,
-                            'size': item.size,
-                            'modified_at': item.modified_at.isoformat() if item.modified_at else None,
-                            'download_url': f"/api/accounts/box-accounts/{box_account.id}/download-file/{item.id}/"
-                        })
+            image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp']
+            video_extensions = ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'webm', 'm4v']
+            media_extensions = image_extensions + video_extensions
             
-            logger.info(f"Fetched {len(files)} files from Box for user: {request.user.email}")
+            def process_folder(folder_id, folder_name='root'):
+                """フォルダ内の画像・動画ファイルを処理（すべて取得）"""
+                try:
+                    folder_media_count = 0
+                    
+                    # Box SDKのget_itemsはイテレータを返すので、全件取得
+                    # representationsフィールドを含めて取得（サムネイルURL取得のため）
+                    try:
+                        items = client.folder(folder_id).get_items(fields=['id', 'name', 'type', 'size', 'modified_at', 'representations'])
+                        item_count = 0
+                        file_count = 0
+                        media_count = 0
+                        for item in items:
+                            item_count += 1
+                            try:
+                                if item.type == 'file':
+                                    file_count += 1
+                                    # 画像・動画ファイルをフィルタリング
+                                    file_ext = item.name.split('.')[-1] if '.' in item.name else ''
+                                    file_ext_lower = file_ext.lower()
+                                    
+                                    # デバッグ: 最初の10個のファイル情報をログに記録
+                                    if file_count <= 10:
+                                        logger.debug(f"File {file_count}: {item.name}, ext: {file_ext_lower}, matches: {file_ext_lower in media_extensions}")
+                                    
+                                    if file_ext_lower in media_extensions:
+                                        media_count += 1
+                                        file_size = getattr(item, 'size', 0)
+                                        
+                                        # サムネイルURLを取得（representationsから直接取得を試みる）
+                                        thumbnail_url = None
+                                        try:
+                                            # representationsフィールドからサムネイルURLを取得
+                                            if hasattr(item, 'representations') and item.representations:
+                                                representations = item.representations
+                                                # サムネイル表現を探す（画像・動画両方に対応）
+                                                for rep in representations.get('entries', []):
+                                                    if rep.get('status') == 'success':
+                                                        rep_type = rep.get('representation', '').lower()
+                                                        # サムネイル表現を探す（画像・動画の両方）
+                                                        if 'thumbnail' in rep_type or 'jpg_thumb' in rep_type or 'mp4_thumb' in rep_type:
+                                                            thumbnail_url = rep.get('content', {}).get('url_template', '').replace('{+asset_path}', '')
+                                                            break
+                                        except Exception as rep_error:
+                                            logger.debug(f"Could not get thumbnail from representations for {item.id}: {str(rep_error)}")
+                                        
+                                        # representationsから取得できなかった場合は、プロキシエンドポイントを使用
+                                        if not thumbnail_url:
+                                            thumbnail_url = f"/api/accounts/box-accounts/{box_account.id}/thumbnail/{item.id}/"
+                                        
+                                        # modified_atの処理（文字列またはdatetimeオブジェクトの両方に対応）
+                                        modified_at_str = None
+                                        if hasattr(item, 'modified_at') and item.modified_at:
+                                            if isinstance(item.modified_at, str):
+                                                modified_at_str = item.modified_at
+                                            else:
+                                                try:
+                                                    modified_at_str = item.modified_at.isoformat()
+                                                except AttributeError:
+                                                    modified_at_str = str(item.modified_at)
+                                        
+                                        files.append({
+                                            'id': item.id,
+                                            'name': item.name,
+                                            'size': file_size or 0,
+                                            'modified_at': modified_at_str,
+                                            'download_url': f"/api/accounts/box-accounts/{box_account.id}/download-file/{item.id}/",
+                                            'thumbnail_url': thumbnail_url,
+                                            'file_type': 'video' if file_ext_lower in video_extensions else 'image'
+                                        })
+                                        folder_media_count += 1
+                            except Exception as item_error:
+                                logger.warning(f"Error processing item in {folder_name}: {str(item_error)}")
+                                continue
+                        
+                        # デバッグ情報をログに記録
+                        logger.debug(f"Folder {folder_name}: processed {item_count} items ({file_count} files, {media_count} media files)")
+                    except Exception as iter_error:
+                        logger.warning(f"Error iterating items in {folder_name}: {str(iter_error)}")
+                        # フォールバック: limitを指定して取得を試みる
+                        try:
+                            items = list(client.folder(folder_id).get_items(limit=1000))
+                            for item in items:
+                                try:
+                                    if item.type == 'file':
+                                        file_ext = item.name.split('.')[-1] if '.' in item.name else ''
+                                        file_ext_lower = file_ext.lower()
+                                        if file_ext_lower in media_extensions:
+                                            file_size = getattr(item, 'size', 0)
+                                            thumbnail_url = f"/api/accounts/box-accounts/{box_account.id}/thumbnail/{item.id}/"
+                                            
+                                            # modified_atの処理（文字列またはdatetimeオブジェクトの両方に対応）
+                                            modified_at_str = None
+                                            if hasattr(item, 'modified_at') and item.modified_at:
+                                                if isinstance(item.modified_at, str):
+                                                    modified_at_str = item.modified_at
+                                                else:
+                                                    try:
+                                                        modified_at_str = item.modified_at.isoformat()
+                                                    except AttributeError:
+                                                        modified_at_str = str(item.modified_at)
+                                            
+                                            files.append({
+                                                'id': item.id,
+                                                'name': item.name,
+                                                'size': file_size or 0,
+                                                'modified_at': modified_at_str,
+                                                'download_url': f"/api/accounts/box-accounts/{box_account.id}/download-file/{item.id}/",
+                                                'thumbnail_url': thumbnail_url,
+                                                'file_type': 'video' if file_ext_lower in video_extensions else 'image'
+                                            })
+                                            folder_media_count += 1
+                                except:
+                                    continue
+                        except:
+                            pass
+                    
+                    return folder_media_count
+                except Exception as e:
+                    logger.warning(f"Error processing folder {folder_name}: {str(e)}")
+                    return 0
+            
+            try:
+                # 1. ルートフォルダの画像・動画ファイルを取得（すべて）
+                logger.info("Starting to fetch files from root folder...")
+                logger.info(f"Box account ID: {box_account.id}, Account name: {box_account.account_name}")
+                root_count = process_folder(folder_id, 'root')
+                logger.info(f"Found {root_count} media files in root folder (total: {len(files)} files)")
+                
+                # デバッグ: ルートフォルダの全アイテムを確認
+                try:
+                    root_items_debug = list(client.folder(folder_id).get_items(limit=100))
+                    logger.info(f"Root folder contains {len(root_items_debug)} items (files + folders)")
+                    file_count = sum(1 for item in root_items_debug if item.type == 'file')
+                    folder_count = sum(1 for item in root_items_debug if item.type == 'folder')
+                    logger.info(f"Root folder breakdown: {file_count} files, {folder_count} folders")
+                    
+                    # 画像ファイルの拡張子を持つファイルを確認
+                    image_files_found = []
+                    for item in root_items_debug:
+                        if item.type == 'file':
+                            file_ext = item.name.split('.')[-1] if '.' in item.name else ''
+                            file_ext_lower = file_ext.lower()
+                            if file_ext_lower in image_extensions:
+                                image_files_found.append(item.name)
+                    logger.info(f"Image files found in root (by extension): {len(image_files_found)} files")
+                    if image_files_found:
+                        logger.info(f"Sample image files: {image_files_found[:5]}")
+                except Exception as debug_error:
+                    logger.warning(f"Debug info collection failed: {str(debug_error)}")
+                
+                # 2. サブフォルダも検索（すべてのサブフォルダを検索）
+                try:
+                    logger.info("Starting to search subfolders...")
+                    root_items = client.folder(folder_id).get_items()
+                    folders_searched = 0
+                    total_folders = 0
+                    
+                    # まずフォルダ数をカウント（進捗表示用）
+                    root_items_list = list(root_items)
+                    total_folders = sum(1 for item in root_items_list if item.type == 'folder')
+                    logger.info(f"Found {total_folders} subfolders to search")
+                    
+                    # 各フォルダを処理
+                    for item in root_items_list:
+                        if item.type == 'folder':
+                            sub_count = process_folder(item.id, item.name)
+                            folders_searched += 1
+                            logger.info(f"Processed folder {folders_searched}/{total_folders}: {item.name} ({sub_count} files, total: {len(files)} files)")
+                except Exception as sub_error:
+                    logger.warning(f"Error searching subfolders: {str(sub_error)}")
+                    # フォールバック: limitを指定して取得を試みる
+                    try:
+                        root_items = list(client.folder(folder_id).get_items(limit=1000))
+                        folders_searched = 0
+                        total_folders = sum(1 for item in root_items if item.type == 'folder')
+                        logger.info(f"Using fallback method: Found {total_folders} subfolders to search")
+                        for item in root_items:
+                            if item.type == 'folder':
+                                sub_count = process_folder(item.id, item.name)
+                                folders_searched += 1
+                                logger.info(f"Processed folder {folders_searched}/{total_folders}: {item.name} ({sub_count} media files, total: {len(files)} files)")
+                        logger.info(f"Searched {folders_searched} subfolders")
+                    except Exception as fallback_error:
+                        logger.error(f"Fallback method also failed: {str(fallback_error)}")
+                        pass
+                        
+            except Exception as e:
+                logger.error(f"Error listing files: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise
+            
+            logger.info(f"Successfully fetched {len(files)} image files from Box for user: {request.user.email}")
+            
+            # キャッシュに保存（5分間）
+            cache.set(cache_key, files, 300)  # 300秒 = 5分
             
             return Response({
-                'files': files
+                'files': files,
+                'total_count': len(files),
+                'cached': False
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
             logger.error(f"Box list files error: {str(e)}")
+            logger.error(f"Traceback: {error_trace}")
             return Response({
-                'error': f'Failed to list files: {str(e)}'
+                'error': f'Failed to list files: {str(e)}',
+                'details': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'], url_path='thumbnail/(?P<file_id>[^/.]+)')
+    def thumbnail(self, request, pk=None, file_id=None):
+        """Boxファイルのサムネイルを取得（認証不要 - 画像タグからのリクエストのため）"""
+        from boxsdk import Client, OAuth2
+        from django.http import HttpResponse
+        from django.core.cache import cache
+        import requests
+        import time
+        
+        # 認証不要だが、Boxアカウントの所有者を確認するため、オブジェクトを取得
+        # ただし、認証されていない場合は、BoxアカウントIDから直接取得を試みる
+        try:
+            if request.user.is_authenticated:
+                box_account = self.get_object()
+            else:
+                # 認証されていない場合でも、BoxアカウントIDから取得を試みる
+                # セキュリティ上の懸念があるが、サムネイルのみなので許容
+                try:
+                    box_account = BoxAccount.objects.get(id=pk)
+                except BoxAccount.DoesNotExist:
+                    return HttpResponse(b'', content_type='image/png', status=404)
+        except Exception as e:
+            logger.error(f"Failed to get BoxAccount: {str(e)}")
+            return HttpResponse(b'', content_type='image/png', status=404)
+        
+        # レート制限を回避するため、短い待機時間を追加（サムネイル取得は頻繁に呼ばれるため）
+        # ただし、最初のリクエストは即座に処理
+        cache_key_rate = f"thumbnail_rate_{file_id}"
+        last_request_time = cache.get(cache_key_rate)
+        if last_request_time:
+            elapsed = time.time() - last_request_time
+            if elapsed < 0.1:  # 100ms未満の場合は待機
+                time.sleep(0.1 - elapsed)
+        cache.set(cache_key_rate, time.time(), 1)  # 1秒間キャッシュ
+        
+        try:
+            # アクセストークンを確認・必要に応じて更新
+            access_token = None
+            try:
+                access_token = self._ensure_box_access_token(box_account)
+                logger.debug(f"Successfully refreshed access token for thumbnail")
+            except Exception as token_error:
+                error_msg = str(token_error)
+                logger.error(f"Failed to refresh Box access token for thumbnail: {error_msg}")
+                
+                # リフレッシュトークンが期限切れの場合は、再認証が必要
+                if 'expired' in error_msg.lower() or 'invalid' in error_msg.lower():
+                    logger.error(f"Box refresh token has expired for account {box_account.id}. Re-authentication required.")
+                    # 期限切れの場合は、空の画像を返す（フロントエンドで適切に処理される）
+                    return HttpResponse(b'', content_type='image/png', status=401)
+                
+                # トークン更新に失敗した場合は、保存されているトークンを試す
+                if box_account.access_token:
+                    access_token = box_account.access_token
+                    logger.warning(f"Using stored access token (may be expired)")
+                else:
+                    logger.error(f"No access token available for Box account {box_account.id}")
+                    return HttpResponse(b'', content_type='image/png', status=401)
+            
+            if not access_token:
+                logger.error(f"No valid access token for Box account {box_account.id}")
+                return HttpResponse(b'', content_type='image/png', status=401)
+            
+            # Box SDKでクライアントを作成
+            oauth2 = OAuth2(
+                client_id=getattr(settings, 'BOX_CLIENT_ID', ''),
+                client_secret=getattr(settings, 'BOX_CLIENT_SECRET', ''),
+                access_token=access_token
+            )
+            client = Client(oauth2)
+            
+            # 方法1: Box APIの直接サムネイルエンドポイントを使用
+            try:
+                logger.debug(f"Attempting to get thumbnail for file {file_id} using direct thumbnail endpoint")
+                thumbnail_url = f"https://api.box.com/2.0/files/{file_id}/thumbnail.128"
+                headers = {'Authorization': f'Bearer {access_token}'}
+                thumb_response = requests.get(thumbnail_url, headers=headers, timeout=10, params={'min_width': '128', 'min_height': '128'})
+                
+                if thumb_response.status_code == 200:
+                    response = HttpResponse(thumb_response.content, content_type='image/png')
+                    response['Cache-Control'] = 'public, max-age=604800'
+                    response['ETag'] = f'"{file_id}"'
+                    logger.debug(f"Successfully got thumbnail for file {file_id} using direct thumbnail endpoint")
+                    return response
+                elif thumb_response.status_code == 202:
+                    # 202 = サムネイル生成中 - 待機して再試行
+                    logger.debug(f"Thumbnail generation in progress for file {file_id}, waiting...")
+                    import time
+                    time.sleep(2)
+                    thumb_response = requests.get(thumbnail_url, headers=headers, timeout=10, params={'min_width': '128', 'min_height': '128'})
+                    if thumb_response.status_code == 200:
+                        response = HttpResponse(thumb_response.content, content_type='image/png')
+                        response['Cache-Control'] = 'public, max-age=604800'
+                        response['ETag'] = f'"{file_id}"'
+                        logger.debug(f"Successfully got thumbnail for file {file_id} after waiting")
+                        return response
+                elif thumb_response.status_code == 400:
+                    # 400 = サムネイルが利用できない（requested_preview_unavailable）
+                    error_data = thumb_response.json() if thumb_response.content else {}
+                    error_code = error_data.get('code', '')
+                    logger.debug(f"Thumbnail unavailable for file {file_id}: {error_code}")
+                    # 次の方法を試すために続行
+            except Exception as thumb_error:
+                logger.warning(f"Direct thumbnail endpoint failed for file {file_id}: {str(thumb_error)}")
+            
+            # 方法2: Box APIの直接呼び出し（representationsエンドポイントを使用）
+            try:
+                logger.debug(f"Attempting to get thumbnail for file {file_id} using representations API")
+                # Box APIのrepresentationsエンドポイントを使用
+                api_url = f"https://api.box.com/2.0/files/{file_id}?fields=representations"
+                headers = {'Authorization': f'Bearer {access_token}'}
+                api_response = requests.get(api_url, headers=headers, timeout=10)
+                
+                if api_response.status_code == 200:
+                    file_data = api_response.json()
+                    representations = file_data.get('representations', {})
+                    entries = representations.get('entries', [])
+                    
+                    # サムネイル表現を探す（優先順位: jpg_thumb > jpg > png）
+                    thumbnail_entries = []
+                    for entry in entries:
+                        if entry.get('status') == 'success':
+                            rep_type = entry.get('representation', '')
+                            content = entry.get('content', {})
+                            url_template = content.get('url_template', '')
+                            if url_template:
+                                # 優先順位を設定
+                                priority = 0
+                                if 'jpg_thumb' in rep_type.lower():
+                                    priority = 3
+                                elif 'jpg' in rep_type.lower() and 'thumb' in rep_type.lower():
+                                    priority = 2
+                                elif 'jpg' in rep_type.lower() or 'png' in rep_type.lower():
+                                    priority = 1
+                                
+                                if priority > 0:
+                                    thumbnail_entries.append((priority, url_template, rep_type))
+                    
+                    # 優先順位の高いものから試す
+                    thumbnail_entries.sort(key=lambda x: x[0], reverse=True)
+                    
+                    for priority, url_template, rep_type in thumbnail_entries:
+                        try:
+                            # URLテンプレートから実際のURLを生成
+                            # {+asset_path}を空文字列に置換（Box APIの仕様に従う）
+                            thumbnail_url = url_template.replace('{+asset_path}', '')
+                            # サムネイル画像を取得
+                            thumb_response = requests.get(thumbnail_url, headers=headers, timeout=10)
+                            if thumb_response.status_code == 200:
+                                # Content-Typeを確認
+                                content_type = thumb_response.headers.get('Content-Type', 'image/png')
+                                response = HttpResponse(thumb_response.content, content_type=content_type)
+                                response['Cache-Control'] = 'public, max-age=604800'
+                                response['ETag'] = f'"{file_id}"'
+                                logger.debug(f"Successfully got thumbnail for file {file_id} using representations API ({rep_type})")
+                                return response
+                        except Exception as url_error:
+                            logger.debug(f"Failed to get thumbnail from {rep_type}: {str(url_error)}")
+                            continue
+            except Exception as api_error:
+                logger.warning(f"Representations API call failed for file {file_id}: {str(api_error)}")
+            
+            # 方法3: Box SDKのget_thumbnail_representationを試す
+            try:
+                logger.debug(f"Attempting to get thumbnail for file {file_id} using get_thumbnail_representation")
+                thumbnail_content = client.file(file_id).get_thumbnail_representation('128', '128')
+                if thumbnail_content:
+                    response = HttpResponse(thumbnail_content, content_type='image/png')
+                    response['Cache-Control'] = 'public, max-age=604800'
+                    response['ETag'] = f'"{file_id}"'
+                    logger.debug(f"Successfully got thumbnail for file {file_id} using get_thumbnail_representation")
+                    return response
+            except Exception as rep_error:
+                logger.warning(f"get_thumbnail_representation failed for file {file_id}: {str(rep_error)}")
+            
+            # 方法4: 画像ファイルの場合は、ファイル自体をダウンロードしてリサイズ（最後の手段）
+            try:
+                logger.debug(f"Attempting to download and resize file {file_id} as fallback")
+                # ファイル情報を取得して、画像・動画ファイルかどうかを確認
+                file_info = client.file(file_id).get()
+                file_name = file_info.name.lower()
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v']
+                media_extensions = image_extensions + video_extensions
+                is_media = any(file_name.endswith(ext) for ext in media_extensions)
+                is_image = any(file_name.endswith(ext) for ext in image_extensions)
+                
+                if is_media:
+                    # 動画ファイルの場合は、Box APIの動画サムネイル機能を使用
+                    if not is_image:
+                        # 動画ファイルのサムネイルはBox APIが提供する場合がある
+                        # ここでは動画ファイルのサムネイル生成はスキップ（Box APIに依存）
+                        logger.debug(f"Video file {file_id} thumbnail generation skipped (Box API may provide it)")
+                    else:
+                        # 画像ファイルの場合は、PILでリサイズ
+                        from io import BytesIO
+                        try:
+                            from PIL import Image
+                            # Box SDKのcontent()メソッドを使用してファイルをダウンロード
+                            # ただし、大きなファイルの場合は時間がかかるため、タイムアウトを設定
+                            file_content = client.file(file_id).content()
+                            
+                            # PILで画像をリサイズ
+                            img = Image.open(BytesIO(file_content))
+                            img.thumbnail((128, 128), Image.Resampling.LANCZOS)
+                            
+                            # リサイズした画像を返す
+                            output = BytesIO()
+                            # 元の画像形式を保持（PNGに変換）
+                            if img.format == 'JPEG':
+                                img.save(output, format='JPEG', quality=85)
+                                content_type = 'image/jpeg'
+                            elif img.format == 'PNG':
+                                img.save(output, format='PNG')
+                                content_type = 'image/png'
+                            else:
+                                img.save(output, format='PNG')
+                                content_type = 'image/png'
+                            output.seek(0)
+                            
+                            response = HttpResponse(output.read(), content_type=content_type)
+                            response['Cache-Control'] = 'public, max-age=604800'
+                            response['ETag'] = f'"{file_id}"'
+                            logger.debug(f"Successfully created thumbnail for file {file_id} by resizing")
+                            return response
+                        except ImportError:
+                            logger.warning("PIL (Pillow) is not installed. Cannot resize images for thumbnails.")
+                        except Exception as resize_error:
+                            logger.warning(f"Failed to resize image for file {file_id}: {str(resize_error)}")
+            except Exception as download_error:
+                logger.warning(f"Failed to download file {file_id} for thumbnail: {str(download_error)}")
+            
+            # すべての方法が失敗した場合
+            logger.error(f"All thumbnail methods failed for file {file_id}")
+            return HttpResponse(b'', content_type='image/png', status=404)
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"Box thumbnail error for file {file_id}: {str(e)}")
+            logger.error(traceback.format_exc())
+            return HttpResponse(b'', content_type='image/png', status=404)
     
     @action(detail=True, methods=['get'], url_path='download-file/(?P<file_id>[^/.]+)')
     def download_file(self, request, pk=None, file_id=None):

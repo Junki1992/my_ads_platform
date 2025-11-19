@@ -54,8 +54,37 @@ const Login: React.FC = () => {
         return;
       }
       
-      message.error(error.response?.data?.error || 'ログインに失敗しました');
-      console.error('Login failed:', error);
+      // より詳細なエラーメッセージを表示
+      let errorMessage = 'ログインに失敗しました';
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'リクエストがタイムアウトしました。サーバーに接続できません。';
+      } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        errorMessage = 'ネットワークエラーが発生しました。バックエンドサーバーが起動しているか確認してください。';
+      } else if (error.response) {
+        errorMessage = error.response?.data?.error || 
+                      error.response?.data?.detail || 
+                      error.response?.data?.message ||
+                      `サーバーエラー (${error.response.status}): ${error.response.statusText}`;
+      } else {
+        errorMessage = error.message || 'ログインに失敗しました';
+      }
+      
+      message.error(errorMessage);
+      console.error('Login failed:', {
+        error,
+        code: error.code,
+        message: error.message,
+        response: error.response,
+        data: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method
+        }
+      });
     } finally {
       setLoading(false);
     }

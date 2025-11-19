@@ -193,9 +193,11 @@ const Dashboard: React.FC = () => {
         <Col xs={24} lg={12}>
           <Card title={t('budgetUsage')}>
             <Progress
-              type="circle"
-              percent={Math.round((summary.total_spend / summary.total_budget) * 100)}
+              type="dashboard"
+              percent={summary.total_budget > 0 ? Math.round((summary.total_spend / summary.total_budget) * 100) : 0}
               format={percent => `${percent}%`}
+              strokeColor="#1890ff"
+              trailColor="#f0f0f0"
               style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}
             />
             <Divider />

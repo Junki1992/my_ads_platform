@@ -67,6 +67,8 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
   const [selectedBoxAccount, setSelectedBoxAccount] = useState<number | null>(null);
   const [boxFiles, setBoxFiles] = useState<BoxFile[]>([]);
   const [loadingBoxFiles, setLoadingBoxFiles] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [thumbnailLoadingStates, setThumbnailLoadingStates] = useState<Record<string, 'loading' | 'loaded' | 'error'>>({});
 
   // 画面サイズの検出
   useEffect(() => {
@@ -1116,17 +1118,326 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
   const [submissionResult, setSubmissionResult] = useState<any>(null);
   const [showSubmissionDetails, setShowSubmissionDetails] = useState(false);
 
+  // Box Content Pickerを開く関数
+  const openBoxContentPicker = async (boxAccountId: number) => {
+    try {
+      // Boxアカウントのアクセストークンを取得
+      const tokenData = await boxAccountService.getAccessToken(boxAccountId);
+      
+      // Box Content Pickerが利用可能か確認（スクリプトの読み込みを待つ）
+      const checkBoxAvailable = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+          let attempts = 0;
+          const maxAttempts = 50; // 5秒間待機
+          
+          const checkInterval = setInterval(() => {
+            attempts++;
+            const Box = (window as any).Box;
+            
+            if (Box && Box.ContentPicker) {
+              clearInterval(checkInterval);
+              resolve(Box);
+            } else if (attempts >= maxAttempts) {
+              clearInterval(checkInterval);
+              reject(new Error('Box Content Pickerがタイムアウトしました。スクリプトが読み込まれていない可能性があります。'));
+            }
+          }, 100);
+        });
+      };
+      
+      let Box;
+      try {
+        Box = await checkBoxAvailable();
+        console.log('Box object loaded:', Box);
+        console.log('Box.ContentPicker:', Box.ContentPicker);
+      } catch (error: any) {
+        console.error('Box Content Picker not available:', error);
+        message.error(`Box Content Pickerが読み込まれていません: ${error.message}`);
+        return;
+      }
+      
+      // コンテナ要素を作成（モーダルとして表示）
+      let container = document.getElementById('box-content-picker-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'box-content-picker-container';
+        container.style.position = 'fixed';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.zIndex = '10000';
+        container.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        document.body.appendChild(container);
+      }
+      
+      // Box Content Pickerを初期化
+      let contentPicker;
+      try {
+        // Box.ContentPickerが関数かコンストラクタかを確認
+        console.log('Box.ContentPicker type:', typeof Box.ContentPicker);
+        console.log('Box.ContentPicker:', Box.ContentPicker);
+        
+        // 両方の方法を試す
+        if (typeof Box.ContentPicker === 'function') {
+          // 関数として呼び出す場合
+          try {
+            contentPicker = Box.ContentPicker();
+            console.log('Content Picker initialized as function');
+          } catch (e1: any) {
+            // コンストラクタとして呼び出す場合
+            try {
+              contentPicker = new Box.ContentPicker();
+              console.log('Content Picker initialized as constructor');
+            } catch (e2: any) {
+              throw new Error(`Both methods failed: function=${e1?.message || 'unknown'}, constructor=${e2?.message || 'unknown'}`);
+            }
+          }
+        } else {
+          throw new Error('Box.ContentPicker is not a function');
+        }
+      } catch (initError: any) {
+        console.error('Box Content Picker init error:', initError);
+        console.error('Error stack:', initError.stack);
+        message.error(`Box Content Pickerの初期化に失敗しました: ${initError.message}`);
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        // フォールバック: 一覧表示モーダル
+        setBoxFilesModalVisible(true);
+        setSelectedBoxAccount(boxAccountId);
+        await loadBoxFiles(boxAccountId);
+        return;
+      }
+      
+      // ファイル選択時のコールバック
+      contentPicker.addListener('choose', async (items: any[]) => {
+        if (items.length === 0) {
+          return;
+        }
+        
+        const selectedFile = items[0];
+        const fileId = selectedFile.id;
+        const fileName = selectedFile.name;
+        
+        try {
+          message.info('Boxファイルをダウンロードしています...');
+          
+          // BoxファイルをダウンロードしてBlobに変換
+          const blob = await boxAccountService.downloadFile(boxAccountId, fileId);
+          
+          // BlobをFileオブジェクトに変換
+          const fileObj = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+          
+          // プレビュー用URLを作成
+          const previewUrl = URL.createObjectURL(fileObj);
+          setPreviewImages([previewUrl]);
+          
+          // フォームフィールドに設定
+          form.setFieldValue('image_upload', [{
+            uid: fileId,
+            name: fileName,
+            status: 'done',
+            url: previewUrl,
+            originFileObj: fileObj,
+            box_file_id: fileId,
+            box_account_id: boxAccountId
+          }]);
+          
+          // フォームにBox情報を保存（送信時に使用）
+          form.setFieldValue('box_file_id', fileId);
+          form.setFieldValue('box_account_id', boxAccountId);
+          
+          // コンテナを削除
+          if (container && container.parentNode) {
+            container.parentNode.removeChild(container);
+          }
+          
+          message.success('Boxファイルを選択しました');
+        } catch (error) {
+          console.error('Failed to download Box file:', error);
+          message.error('Boxファイルのダウンロードに失敗しました');
+        }
+      });
+      
+      // キャンセル時のコールバック
+      contentPicker.addListener('cancel', () => {
+        console.log('Box Content Picker cancelled');
+        // コンテナを削除
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      });
+      
+      // エラー時のコールバック
+      contentPicker.addListener('error', async (pickerError: any) => {
+        console.error('Box Content Picker error:', pickerError);
+        message.error(`Box Content Pickerエラー: ${pickerError?.message || '不明なエラー'}`);
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        // フォールバック: 一覧表示モーダル
+        setBoxFilesModalVisible(true);
+        setSelectedBoxAccount(boxAccountId);
+        await loadBoxFiles(boxAccountId);
+      });
+
+      // Content Pickerを表示
+      console.log('Attempting to show Content Picker...');
+      console.log('Access token length:', tokenData.access_token?.length);
+      console.log('Container element:', document.getElementById('box-content-picker-container'));
+      
+      try {
+        // 複数のAPI形式を試す
+        let showSuccess = false;
+        
+        // 方法1: 標準的なAPI (accessToken, folderId, options)
+        try {
+          console.log('Trying method 1: show(accessToken, folderId, options)');
+          contentPicker.show(tokenData.access_token, '0', {
+            container: '#box-content-picker-container',
+            modal: true,
+            modalTitle: 'Boxから画像を選択',
+            modalButtonLabel: '選択',
+            selectableType: 'file',
+            fileExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+            size: 'large'
+          });
+          showSuccess = true;
+          console.log('Content Picker shown successfully (method 1)');
+        } catch (e1: any) {
+          console.warn('Method 1 failed:', e1.message);
+          
+          // 方法2: オプションのみ (accessToken, options)
+          try {
+            console.log('Trying method 2: show(accessToken, options)');
+            contentPicker.show(tokenData.access_token, {
+              container: '#box-content-picker-container',
+              modal: true,
+              modalTitle: 'Boxから画像を選択',
+              modalButtonLabel: '選択',
+              selectableType: 'file',
+              fileExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+              size: 'large'
+            });
+            showSuccess = true;
+            console.log('Content Picker shown successfully (method 2)');
+          } catch (e2: any) {
+            console.warn('Method 2 failed:', e2.message);
+            
+            // 方法3: 最小限のオプション
+            try {
+              console.log('Trying method 3: minimal options');
+              contentPicker.show(tokenData.access_token, null, {
+                container: '#box-content-picker-container',
+                modal: true,
+                modalTitle: 'Boxから画像を選択',
+                modalButtonLabel: '選択'
+              });
+              showSuccess = true;
+              console.log('Content Picker shown successfully (method 3)');
+            } catch (e3: any) {
+              console.error('All methods failed:', { e1: e1.message, e2: e2.message, e3: e3.message });
+              throw new Error(`All show methods failed. Last error: ${e3.message}`);
+            }
+          }
+        }
+        
+        if (!showSuccess) {
+          throw new Error('Content Picker show() did not succeed');
+        }
+      } catch (showError: any) {
+        console.error('Box Content Picker show error:', showError);
+        console.error('Error details:', {
+          message: showError.message,
+          stack: showError.stack,
+          name: showError.name
+        });
+        message.error(`Box Content Pickerの表示に失敗しました: ${showError.message || '不明なエラー'}`);
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        // フォールバック: 一覧表示モーダル
+        setBoxFilesModalVisible(true);
+        setSelectedBoxAccount(boxAccountId);
+        await loadBoxFiles(boxAccountId);
+      }
+      
+    } catch (error) {
+      console.error('Failed to open Box Content Picker:', error);
+      message.error('Box Content Pickerの起動に失敗しました');
+    }
+  };
+
   // Boxファイルを読み込む関数
   const loadBoxFiles = async (boxAccountId: number) => {
     setLoadingBoxFiles(true);
+    setLoadingProgress(0);
+    
+    // 進捗をシミュレート（0%から90%まで徐々に増やす）
+    const progressInterval = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        // 徐々に進捗を増やす（最初は速く、後半は遅く）
+        const increment = prev < 50 ? 5 : prev < 80 ? 2 : 1;
+        return Math.min(prev + increment, 90);
+      });
+    }, 500);
+    
     try {
+      message.info('Boxファイルの取得を開始しました。ファイル数が多い場合、処理に時間がかかる場合があります。', 5);
       const response = await boxAccountService.listFiles(boxAccountId);
-      setBoxFiles(response.files);
-    } catch (error) {
+      
+      // 進捗を100%に
+      clearInterval(progressInterval);
+      setLoadingProgress(100);
+      
+      const files = response.files || [];
+      setBoxFiles(files);
+      
+      // サムネイルの読み込み状態を初期化（すべて読み込み中として設定）
+      const initialLoadingStates: Record<string, 'loading' | 'loaded' | 'error'> = {};
+      files.forEach(file => {
+        if (file.thumbnail_url) {
+          initialLoadingStates[file.id] = 'loading'; // 'loading' = 読み込み中
+        }
+      });
+      setThumbnailLoadingStates(initialLoadingStates);
+      if (!response.files || response.files.length === 0) {
+        message.warning('画像・動画ファイルが見つかりませんでした。Boxアカウントに画像ファイル（jpg, jpeg, png, gif, webp）または動画ファイル（mp4, mov, avi等）が存在するか確認してください。');
+      } else {
+        message.success(`${response.files.length}件のメディアファイルを取得しました。`, 3);
+      }
+    } catch (error: any) {
+      clearInterval(progressInterval);
       console.error('Failed to load Box files:', error);
-      message.error('Boxファイルの取得に失敗しました');
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.error || errorData.details || error.message || 'Boxファイルの取得に失敗しました';
+      const requiresReauth = errorData.requires_reauth || false;
+      const statusCode = error.response?.status;
+      
+      // 認証エラー（401）または再認証が必要な場合
+      if (statusCode === 401 || requiresReauth) {
+        message.error({
+          content: 'Boxアカウントの認証が期限切れです。設定画面でBoxアカウントを再連携してください。',
+          duration: 10,
+        });
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+        // タイムアウトエラーの場合は特別なメッセージを表示
+        message.error('Boxファイルの取得がタイムアウトしました。ファイル数が非常に多い可能性があります。しばらく時間をおいて再度お試しください。', 10);
+      } else {
+        message.error(`Boxファイルの取得に失敗しました: ${errorMessage}`, 5);
+      }
     } finally {
       setLoadingBoxFiles(false);
+      setLoadingProgress(0);
     }
   };
 
@@ -1814,8 +2125,20 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
 
         {loadingBoxFiles ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Progress type="circle" />
-            <div style={{ marginTop: 16 }}>Boxファイルを読み込んでいます...</div>
+            <Progress 
+              type="circle" 
+              percent={loadingProgress}
+              format={(percent) => `${percent}%`}
+            />
+            <div style={{ marginTop: 16, fontSize: 16, fontWeight: 500 }}>
+              Boxファイルを読み込んでいます...
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
+              ファイル数が多い場合、最大5分程度かかる場合があります
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12, color: '#999' }}>
+              しばらくお待ちください...
+            </div>
           </div>
         ) : boxFiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -1823,7 +2146,32 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 16 }}>
-            {boxFiles.map(file => (
+            {boxFiles.map((file, index) => {
+              // thumbnail_urlが既にフルパスの場合はそのまま使用、相対パスの場合はAPI URLを追加
+              let thumbnailUrl = null;
+              if (file.thumbnail_url) {
+                if (file.thumbnail_url.startsWith('http://') || file.thumbnail_url.startsWith('https://')) {
+                  thumbnailUrl = file.thumbnail_url;
+                } else {
+                  // 相対パスの場合、/api/で始まっている場合は/api/を削除してから結合（重複を防ぐ）
+                  const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+                  let path = file.thumbnail_url;
+                  // /api/で始まる場合は削除（baseUrlに既に/api/が含まれているため）
+                  if (path.startsWith('/api/')) {
+                    path = path.substring(4); // '/api/'を削除
+                  } else if (path.startsWith('api/')) {
+                    path = path.substring(4); // 'api/'を削除
+                  }
+                  // baseUrlが/api/で終わっているか確認
+                  const cleanBaseUrl = baseUrl.endsWith('/api') ? baseUrl : (baseUrl.endsWith('/api/') ? baseUrl.slice(0, -1) : baseUrl);
+                  thumbnailUrl = `${cleanBaseUrl}${path.startsWith('/') ? path : '/' + path}`;
+                }
+              }
+              
+              // 最初の12枚（最初の画面に表示される分）は優先読み込み、それ以降は遅延読み込み
+              const shouldLazyLoad = index >= 12;
+              
+              return (
               <div
                 key={file.id}
                 style={{
@@ -1832,7 +2180,8 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                   padding: 8,
                   cursor: 'pointer',
                   textAlign: 'center',
-                  transition: 'all 0.3s'
+                    transition: 'all 0.3s',
+                    backgroundColor: '#fff'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = '#1890ff';
@@ -1844,14 +2193,65 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                 }}
                 onClick={() => handleBoxFileSelect(file)}
               >
-                <div style={{ fontSize: 12, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {thumbnailUrl ? (
+                    <img
+                      src={thumbnailUrl}
+                      alt={file.name}
+                      loading={shouldLazyLoad ? "lazy" : "eager"}
+                      style={{
+                        width: '100%',
+                        height: '120px',
+                        objectFit: 'cover',
+                        borderRadius: 4,
+                        marginBottom: 8,
+                        backgroundColor: '#f5f5f5',
+                        display: thumbnailLoadingStates[file.id] === 'error' ? 'none' : 'block'
+                      }}
+                      onLoad={() => {
+                        // 画像の読み込みが完了したら、読み込み状態を'loaded'に設定
+                        setThumbnailLoadingStates(prev => ({ ...prev, [file.id]: 'loaded' }));
+                      }}
+                      onError={(e) => {
+                        // サムネイル読み込み失敗時はプレースホルダーを表示
+                        setThumbnailLoadingStates(prev => ({ ...prev, [file.id]: 'error' }));
+                        const target = e.currentTarget;
+                        target.style.display = 'none';
+                        const placeholder = target.nextElementSibling as HTMLElement;
+                        if (placeholder && placeholder.classList.contains('thumbnail-placeholder')) {
+                          placeholder.style.display = 'flex';
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div 
+                    className="thumbnail-placeholder"
+                    style={{
+                      width: '100%',
+                      height: '120px',
+                      backgroundColor: '#f5f5f5',
+                      borderRadius: 4,
+                      marginBottom: 8,
+                      display: (thumbnailUrl && thumbnailLoadingStates[file.id] === 'error') ? 'flex' : (thumbnailUrl ? 'none' : 'flex'),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#999',
+                      fontSize: 12,
+                      flexDirection: 'column',
+                      gap: 8
+                    }}
+                  >
+                    <span style={{ fontSize: 32 }}>🖼️</span>
+                    <span>{thumbnailUrl ? (thumbnailLoadingStates[file.id] === 'error' ? '読み込み失敗' : '読み込み中...') : '画像なし'}</span>
+                  </div>
+                  <div style={{ fontSize: 12, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
                   {file.name}
                 </div>
                 <div style={{ fontSize: 10, color: '#999' }}>
-                  {(file.size / 1024).toFixed(1)} KB
+                    {file.size > 0 ? `${(file.size / 1024).toFixed(1)} KB` : 'サイズ不明'}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Modal>

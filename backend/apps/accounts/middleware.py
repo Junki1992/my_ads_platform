@@ -22,8 +22,10 @@ class RateLimitMiddleware:
         self.rate_limit_per_hour = 1000  # 1時間あたりのリクエスト数
         
     def __call__(self, request):
-        # 管理画面とヘルスチェックは除外
-        if request.path.startswith('/admin/') or request.path == '/health/':
+        # 管理画面、ヘルスチェック、サムネイルエンドポイントは除外（サムネイルは大量にリクエストされるため）
+        if (request.path.startswith('/admin/') or 
+            request.path == '/health/' or 
+            '/thumbnail/' in request.path):
             return self.get_response(request)
         
         # IPアドレスを取得

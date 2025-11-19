@@ -4,7 +4,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 300000, // タイムアウトを300秒（5分）に延長（Boxファイル検索に時間がかかる場合があるため）
   headers: {
     'Content-Type': 'application/json',
   },
@@ -30,7 +30,13 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Boxアカウント関連の401エラー（再認証が必要）の場合はログアウトしない
+    const isBoxAccountError = originalRequest?.url?.includes('/box-accounts/') && 
+                              error.response?.data && 
+                              typeof error.response.data === 'object' &&
+                              'requires_reauth' in (error.response.data as any);
+    
+    if (error.response?.status === 401 && !originalRequest._retry && !isBoxAccountError) {
       originalRequest._retry = true;
 
       try {
