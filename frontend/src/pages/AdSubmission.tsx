@@ -57,6 +57,7 @@ interface AdSubmissionProps {}
 const AdSubmission: React.FC<AdSubmissionProps> = () => {
   const { t } = useTranslation();
   const [form] = Form.useForm();
+  const imageUploadValue = Form.useWatch('image_upload', form);
   const [currentStep, setCurrentStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -642,6 +643,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                   multiple
                   listType="picture-card"
                   className="ad-image-uploader"
+                    fileList={imageUploadValue || []}
                   beforeUpload={(file: any) => {
                     console.log('BeforeUpload called with file:', file);
                     // ファイルのvalidation（例：サイズチェック）
@@ -651,6 +653,37 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                       return false;
                     }
                     return false; // 自動アップロードは無効
+                  }}
+                  onRemove={(file: any) => {
+                    // ファイル削除時の処理
+                    console.log('File removed:', file);
+                    
+                    // プレビューURLをクリーンアップ（メモリリーク防止）
+                    if (file.url && file.url.startsWith('blob:')) {
+                      URL.revokeObjectURL(file.url);
+                    }
+                    
+                    // フォームフィールドから削除
+                    const currentFiles = form.getFieldValue('image_upload') || [];
+                    const remainingFiles = currentFiles.filter((f: any) => f.uid !== file.uid);
+                    form.setFieldValue('image_upload', remainingFiles);
+                    
+                    // プレビュー画像を更新
+                    const remainingUrls = remainingFiles.map((f: any) => {
+                      if (f.url) return f.url;
+                      if (f.thumbUrl) return f.thumbUrl;
+                      if (f.originFileObj) return URL.createObjectURL(f.originFileObj);
+                      return null;
+                    }).filter(Boolean);
+                    setPreviewImages(remainingUrls);
+                    
+                    // Boxファイル情報もクリア（削除されたファイルがBoxファイルの場合）
+                    if (file.box_file_id) {
+                      form.setFieldValue('box_file_id', undefined);
+                      form.setFieldValue('box_account_id', undefined);
+                    }
+                    
+                    return true; // 削除を許可
                   }}
                   onChange={(info: any) => {
                     console.log('=== Upload onChange Debug ===');
@@ -699,15 +732,17 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                     console.log('=== Upload onChange Debug End ===');
                   }}
                 >
-                  <div>
-                    <PlusOutlined />
-                    <div style={{ marginTop: 8 }}>画像をアップロード</div>
-                  </div>
+                  {(!imageUploadValue || imageUploadValue.length === 0) && (
+                    <div>
+                      <PlusOutlined />
+                      <div style={{ marginTop: 8 }}>画像をアップロード</div>
+                    </div>
+                  )}
                 </Upload>
                 <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
                   推奨サイズ：1080×1080px以上
                 </div>
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <Button 
                     type="dashed" 
                     onClick={async () => {
@@ -730,6 +765,32 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                     }}
                   >
                     Boxから選択
+                  </Button>
+                  <Button 
+                    type="default" 
+                    danger
+                    onClick={() => {
+                      // 画像をクリア
+                      const currentFiles = form.getFieldValue('image_upload') || [];
+                      if (currentFiles.length > 0) {
+                        // プレビューURLをクリーンアップ
+                        currentFiles.forEach((file: any) => {
+                          if (file.url && file.url.startsWith('blob:')) {
+                            URL.revokeObjectURL(file.url);
+                          }
+                        });
+                        setPreviewImages([]);
+                        form.setFieldValue('image_upload', []);
+                        form.setFieldValue('box_file_id', undefined);
+                        form.setFieldValue('box_account_id', undefined);
+                        message.success('画像をクリアしました');
+                      } else {
+                        message.info('クリアする画像がありません');
+                      }
+                    }}
+                    disabled={!imageUploadValue || imageUploadValue.length === 0}
+                  >
+                    選択画像をクリア
                   </Button>
                 </div>
               </Form.Item>
@@ -1017,19 +1078,42 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
           <Card size="small" title="広告素材" style={{ marginTop: 16 }}>
             <Row gutter={16}>
               <Col span={6}>
-                <Avatar 
-                  shape="square" 
-                  size={80} 
-                  style={{ backgroundColor: '#f0f0f0' }}
-                  icon={<CameraOutlined />}
-                />
+                {(() => {
+                  const imageUpload = imageUploadValue || form.getFieldValue('image_upload');
+                  const imageUrl = imageUpload && imageUpload.length > 0 
+                    ? (imageUpload[0].url || (imageUpload[0].originFileObj ? URL.createObjectURL(imageUpload[0].originFileObj) : null))
+                    : null;
+                  
+                  return imageUrl ? (
+                    <img 
+                      src={imageUrl} 
+                      alt="広告画像" 
+                      style={{ 
+                        width: '100%', 
+                        maxWidth: 120, 
+                        height: 120, 
+                        objectFit: 'cover', 
+                        borderRadius: 4,
+                        border: '1px solid #d9d9d9'
+                      }} 
+                    />
+                  ) : (
+                    <Avatar 
+                      shape="square" 
+                      size={80} 
+                      style={{ backgroundColor: '#f0f0f0' }}
+                      icon={<CameraOutlined />}
+                    />
+                  );
+                })()}
               </Col>
               <Col span={18}>
                 <div style={{ lineHeight: '1.8' }}>
-                  <div><Text type="secondary">広告名:</Text> 女性向け新商品_メインバナー</div>
-                  <div><Text type="secondary">見出し:</Text> 魅力的な見出しがここに表示されます</div>
-                  <div><Text type="secondary">CTA:</Text> 詳細を見る</div>
-                  <div><Text type="secondary">URL:</Text> https://your-website.com</div>
+                  <div><Text type="secondary">広告名:</Text> <Text strong>{form.getFieldValue('ad_name') || '未設定'}</Text></div>
+                  <div><Text type="secondary">見出し:</Text> <Text strong>{form.getFieldValue('headline') || '未設定'}</Text></div>
+                  <div><Text type="secondary">説明文:</Text> <Text strong>{form.getFieldValue('description') || '未設定'}</Text></div>
+                  <div><Text type="secondary">CTA:</Text> <Text strong>{form.getFieldValue('cta') || '未設定'}</Text></div>
+                  <div><Text type="secondary">URL:</Text> <Text strong>{form.getFieldValue('website_url') || '未設定'}</Text></div>
                 </div>
               </Col>
             </Row>
@@ -1248,6 +1332,15 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
           form.setFieldValue('box_file_id', fileId);
           form.setFieldValue('box_account_id', boxAccountId);
           
+          // 既存のプレビューURLをクリーンアップ（メモリリーク防止）
+          if (previewImages.length > 0) {
+            previewImages.forEach(url => {
+              if (url.startsWith('blob:')) {
+                URL.revokeObjectURL(url);
+              }
+            });
+          }
+          
           // コンテナを削除
           if (container && container.parentNode) {
             container.parentNode.removeChild(container);
@@ -1454,6 +1547,15 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
       
       // BlobをFileオブジェクトに変換
       const fileObj = new File([blob], file.name, { type: blob.type || 'image/jpeg' });
+      
+      // 既存のプレビューURLをクリーンアップ（メモリリーク防止）
+      if (previewImages.length > 0) {
+        previewImages.forEach(url => {
+          if (url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        });
+      }
       
       // プレビュー用URLを作成
       const previewUrl = URL.createObjectURL(fileObj);
