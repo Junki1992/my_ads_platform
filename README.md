@@ -29,8 +29,13 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 
 ### Box連携
 - ✅ Box OAuth 2.0認証
-- ✅ Boxファイル一覧取得
-- ✅ Boxからクリエイティブ画像を選択して入稿
+- ✅ 複数Boxアカウント管理
+- ✅ Boxファイル一覧取得（画像・動画ファイル対応）
+- ✅ 画像ファイルサポート（jpg, jpeg, png, gif, webp）
+- ✅ 動画ファイルサポート（mp4, mov, avi, mkv, wmv, flv, webm, m4v）
+- ✅ サムネイル表示機能（Box API + 画像リサイズ対応）
+- ✅ Boxからクリエイティブ画像・動画を選択して入稿
+- ✅ アクセストークン自動更新
 
 ### その他
 - ✅ アラート機能
@@ -133,8 +138,10 @@ npm start
 - `GET /api/accounts/box-accounts/` - Boxアカウント一覧取得
 - `GET /api/accounts/box-accounts/oauth_authorize/` - Box OAuth認証URL取得
 - `GET /api/accounts/box-accounts/oauth_callback/` - Box OAuth認証コールバック
-- `GET /api/accounts/box-accounts/{id}/list_files/` - Boxファイル一覧取得
+- `GET /api/accounts/box-accounts/{id}/list_files/` - Boxファイル一覧取得（画像・動画ファイル）
+- `GET /api/accounts/box-accounts/{id}/thumbnail/{file_id}/` - Boxファイルサムネイル取得
 - `GET /api/accounts/box-accounts/{id}/download-file/{file_id}/` - Boxファイルダウンロード
+- `GET /api/accounts/box-accounts/{id}/get_access_token/` - Boxアクセストークン取得（Content Picker用）
 - `DELETE /api/accounts/box-accounts/{id}/` - Boxアカウント削除
 
 ### Metaアカウント管理
@@ -335,6 +342,9 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py createsu
 - バックエンド非同期処理（Celery + Redis）
 - ファイルアップロード・バリデーション
 - Meta API連携（広告アカウント管理）
+- **Box API連携（ファイル管理・クリエイティブ選択）** 📦
+- **動画ファイルサポート** 🎬
+- **サムネイル自動生成・表示** 🖼️
 - GCP Compute Engineデプロイ
 
 **セキュリティ機能：**
@@ -349,6 +359,8 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py createsu
 - SECURE_PROXY_SSL_HEADER設定
 - CORS保護
 - Meta APIトークン暗号化保存
+- Box APIトークン暗号化保存
+- Boxアカウント認証エラー時の適切なエラーハンドリング
 
 **テスト：**
 - 30+のテストケース実装
@@ -368,6 +380,20 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py createsu
    - `https://yourdomain.com/api/accounts/meta-accounts/oauth_callback/`
 4. **App ID**と**App Secret**を`.env`ファイルに設定
 5. 必要な権限を付与：`ads_management`, `ads_read`, `business_management`
+
+**Box for Developers設定（Box連携を使用する場合）：**
+1. [Box Developers](https://developer.box.com/)でアプリを作成
+2. **OAuth 2.0**を有効化
+3. **リダイレクトURI**に以下を追加：
+   - 本番環境: `https://yourdomain.com/api/accounts/box-accounts/oauth_callback/`
+   - 開発環境: `http://localhost:8000/api/accounts/box-accounts/oauth_callback/`
+4. **スコープ**に以下を設定：
+   - `root_readwrite`（ファイル読み書きに必要）
+5. **Client ID**と**Client Secret**を`.env`ファイルに設定：
+   - `BOX_CLIENT_ID`
+   - `BOX_CLIENT_SECRET`
+6. **CORS設定**（Box Content Pickerを使用する場合）：
+   - アプリ設定で許可するオリジンを追加（例: `http://localhost:3000`, `https://yourdomain.com`）
 
 ## ⚠️ 免責事項
 
