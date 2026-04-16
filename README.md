@@ -70,6 +70,8 @@ Meta（Facebook/Instagram）広告管理プラットフォーム
 - Git（バージョン管理）
 - GCP Compute Engine（デプロイ環境）
 
+本番を GCP（Cloud SQL + Compute Engine）で運用する手順は [docs/deployment-gcp.md](docs/deployment-gcp.md) を参照してください。
+
 ## セットアップ
 
 ### 環境変数
@@ -84,7 +86,7 @@ cp env.example .env
 - `JWT_SECRET_KEY`: JWT トークン用シークレットキー
 - `META_APP_ID`, `META_APP_SECRET`: Meta API認証情報（プラットフォーム共通）
 - `META_ACCESS_TOKEN`: Meta長期アクセストークン（オプション）
-- `BOX_CLIENT_ID`, `BOX_CLIENT_SECRET`: Box API認証情報（Box連携を使用する場合）
+- `BOX_CLIENT_ID`, `BOX_CLIENT_SECRET`, `BOX_REDIRECT_URI`: Box API認証情報とリダイレクトURI（Box連携を使用する場合）
 - `FRONTEND_URL`: フロントエンドURL（OAuth認証時のリダイレクト先）
 - `ALLOWED_HOSTS`: 許可するホスト名（カンマ区切り）
 - `REDIS_URL`: Redis接続URL
@@ -137,7 +139,7 @@ npm start
 
 - `GET /api/accounts/box-accounts/` - Boxアカウント一覧取得
 - `GET /api/accounts/box-accounts/oauth_authorize/` - Box OAuth認証URL取得
-- `GET /api/accounts/box-accounts/oauth_callback/` - Box OAuth認証コールバック
+- `GET /api/accounts/box-accounts/oauth_callback/` - Box OAuth認証コールバック（`BOX_REDIRECT_URI` と一致させる必要あり）
 - `GET /api/accounts/box-accounts/{id}/list_files/` - Boxファイル一覧取得（画像・動画ファイル）
 - `GET /api/accounts/box-accounts/{id}/thumbnail/{file_id}/` - Boxファイルサムネイル取得
 - `GET /api/accounts/box-accounts/{id}/download-file/{file_id}/` - Boxファイルダウンロード
@@ -387,11 +389,13 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py createsu
 3. **リダイレクトURI**に以下を追加：
    - 本番環境: `https://yourdomain.com/api/accounts/box-accounts/oauth_callback/`
    - 開発環境: `http://localhost:8000/api/accounts/box-accounts/oauth_callback/`
+   - ※ Box Developer Console で登録したURLを `.env` の `BOX_REDIRECT_URI` にも同じ文字列で設定してください
 4. **スコープ**に以下を設定：
    - `root_readwrite`（ファイル読み書きに必要）
 5. **Client ID**と**Client Secret**を`.env`ファイルに設定：
    - `BOX_CLIENT_ID`
    - `BOX_CLIENT_SECRET`
+   - `BOX_REDIRECT_URI`
 6. **CORS設定**（Box Content Pickerを使用する場合）：
    - アプリ設定で許可するオリジンを追加（例: `http://localhost:3000`, `https://yourdomain.com`）
 

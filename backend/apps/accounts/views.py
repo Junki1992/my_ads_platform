@@ -970,7 +970,10 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Box OAuth認証URLを生成
-        redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/box-accounts/oauth_callback/"
+        redirect_uri = (
+            getattr(settings, 'BOX_REDIRECT_URI', None)
+            or f"{request.scheme}://{request.get_host()}/api/accounts/box-accounts/oauth_callback/"
+        )
         # URLエンコード
         from urllib.parse import quote
         redirect_uri_encoded = quote(redirect_uri, safe='')
@@ -1020,7 +1023,10 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
             # Box APIでアクセストークンを取得
             client_id = getattr(settings, 'BOX_CLIENT_ID', None)
             client_secret = getattr(settings, 'BOX_CLIENT_SECRET', None)
-            redirect_uri = f"{request.scheme}://{request.get_host()}/api/accounts/box-accounts/oauth_callback/"
+            redirect_uri = (
+                getattr(settings, 'BOX_REDIRECT_URI', None)
+                or f"{request.scheme}://{request.get_host()}/api/accounts/box-accounts/oauth_callback/"
+            )
             
             if not client_id or not client_secret:
                 logger.error("Box credentials not configured")

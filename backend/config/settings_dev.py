@@ -14,6 +14,10 @@ DATABASES = {
 # デバッグモード
 DEBUG = True
 
+# 同一LANの端末から（例: http://192.168.x.x:8000）アクセスする場合の Host ヘッダを許可
+# DEBUG=True のときのみ '*' は Django により許容される（本番では使わないこと）
+ALLOWED_HOSTS = ['*']
+
 # CORS設定（開発環境）
 CORS_ALLOW_ALL_ORIGINS = True
 

@@ -93,6 +93,9 @@ DATABASES = {
         'PORT': config('DB_PORT', default=''),
     }
 }
+_db_sslmode = config('DB_SSLMODE', default='').strip()
+if _db_sslmode:
+    DATABASES['default']['OPTIONS'] = {'sslmode': _db_sslmode}
 
 # 国際化設定
 LANGUAGE_CODE = 'ja'
@@ -181,6 +184,7 @@ META_ACCESS_TOKEN = config('META_ACCESS_TOKEN', default='')
 # Box API設定
 BOX_CLIENT_ID = config('BOX_CLIENT_ID', default='')
 BOX_CLIENT_SECRET = config('BOX_CLIENT_SECRET', default='')
+BOX_REDIRECT_URI = config('BOX_REDIRECT_URI', default=None)
 
 # フロントエンドURL
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
