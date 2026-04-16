@@ -1,0 +1,144 @@
+# GCP 本番デプロイ（Cloud SQL + Compute Engine）
+
+チーム運用を想定し、データベースは **Cloud SQL for PostgreSQL**、アプリは **Compute Engine 上の Docker Compose**（`docker-compose.gcp.yml`）を前提にした手順です。
+
+## 手引き：最初からこの順で（思い出し用）
+
+一度全体の流れを見てから、下の各節で細部を埋めていくと迷いにくいです。
+
+### 0. ローカルで思い出す（任意）
+
+コードの動きを手元で確認したいだけなら、リポジトリ直下で `cp env.example .env` → `README.md` の「セットアップ」に従い、Backend / Frontend を起動します。本番 GCP はこの次から。
+
+### 1. Google Cloud 側で「土台」を作る
+
+1. [Google Cloud Console](https://console.cloud.google.com/) にログインする。
+2. **プロジェクト**を選ぶか新規作成する。
+3. **請求**がプロジェクトに紐づいていることを確認する。
+4. **API を有効化**する（例: Compute Engine API、Cloud SQL Admin API、Secret Manager API など、使うサービスに応じて）。
+
+### 2. データベース（Cloud SQL）
+
+1. **Cloud SQL** で **PostgreSQL** インスタンスを作成する（バージョンはアプリに合わせる。例: 15）。
+2. **データベース名・ユーザー・パスワード**を決め、メモしておく（後で `.env` に書く）。
+3. **自動バックアップ**を有効にする。
+4. 接続方法を決める。
+   - **プライベート IP**（推奨）: VM と同じ **VPC** でプライベート接続できるようにする。**VPC は、組織ポリシーなど特段の理由がなければプロジェクトの `default` VPC でよい。** Cloud SQL のネットワーク設定でも VM の作成時でも、同じく **`default` VPC** を選ぶ。
+   - **パブリック IP**: 承認済みネットワークや SSL など、Cloud SQL の画面の指示に従う。その場合 Django 側では `DB_SSLMODE=require` を検討（`env.gcp.example` 参照）。
+
+### 3. アプリ用 VM（Compute Engine）
+
+1. **Compute Engine** で **VM インスタンス**を作成する（リージョンは Cloud SQL と揃えるのが無難）。**ネットワークは Cloud SQL と同じ VPC（通常は `default` VPC）を選ぶ。**
+2. OS はチームで決めたもの（例: Ubuntu LTS）。**Docker** と **Docker Compose プラグイン**をインストールする。
+3. **ファイアウォール**で、ユーザー向けは **TCP 80 と 443** を開ける（SSH は IAP や限定 IP などチーム方針で）。
+
+### 4. VM の中でリポジトリと `.env`
+
+1. VM に SSH して、リポジトリを置く（`git clone` など）。
+2. プロジェクトルートで `cp env.gcp.example .env`。
+3. `.env` を編集する。**ドメイン**（`ALLOWED_HOSTS` / `CORS_ALLOWED_ORIGINS` / `FRONTEND_URL`）、**Cloud SQL**（`DB_HOST` など）、**秘密鍵類**（`SECRET_KEY` / `JWT_SECRET_KEY` など）を本番用に埋める。
+4. 秘密情報は **Secret Manager** に置き、`scripts/gcp/export-secrets-env.sh` で断片を出してマージしてもよい（スクリプト内の命名規則をチームで合わせる）。
+
+### 5. フロントのビルドとコンテナ起動
+
+1. `frontend` で `npm ci` → `npm run build`（`frontend/build` ができる）。
+2. リポジトリルートで `docker compose -f docker-compose.gcp.yml --env-file .env build` → `up -d`。
+3. **マイグレーション**と **collectstatic** を実行する（下の「初回・更新デプロイ」のコマンド）。
+
+### 6. HTTPS とドメイン
+
+- ドメインの **DNS** を VM の外部 IP かロードバランサに向ける。
+- **Let’s Encrypt**（既存の Nginx 設定）や **HTTPS ロードバランサ** など、チームの方式で TLS を有効にする。
+
+### 7. 更新するとき
+
+- コードを `git pull`（またはデプロイパイプライン）したあと、同じ `docker compose -f docker-compose.gcp.yml` で **build → up**、必要なら **migrate**。問題があれば **前のコミットに戻して** 同様に build / up（ロールバックの詳細は下記）。
+
+迷ったら **README の「本番を GCP」リンク**（このファイル）と **`env.gcp.example`** を開いたまま、上から順にチェックしていくと抜け漏れが減ります。
+
+## 構成の要点
+
+| コンポーネント | 推奨 |
+|----------------|------|
+| PostgreSQL | Cloud SQL（プライベート IP 推奨） |
+| Redis / Celery | 同一 VM 上のコンテナ（`docker-compose.gcp.yml`） |
+| Django / Gunicorn / Nginx | 同一 VM 上のコンテナ |
+| 秘密情報 | Secret Manager + デプロイ時に `.env` へ反映（または実行時注入） |
+
+## 事前準備（GCP）
+
+1. **プロジェクト**・請求の有効化。
+2. **VPC とサブネット** — **特段の要件がなければ `default` VPC のままでよい。** Cloud SQL（プライベート IP）と VM は **どちらもこの `default` VPC** に載せ、リージョンは揃える（例: 両方とも `asia-northeast1`）。プライベート接続用に **Service Networking API** を有効にし、**プライベートサービス接続**（割り当て IP レンジ）を `default` VPC 上で設定する。
+3. **Cloud SQL（PostgreSQL）**
+   - バージョンは開発と揃える（例: 15）。
+   - **自動バックアップ**とメンテナンスウィンドウを有効化。
+   - GCE から接続する VM と **同じ VPC** にプライベート IP で配置するか、**Cloud SQL Auth Proxy** を利用。
+4. **Compute Engine VM**
+   - Docker と Docker Compose プラグインをインストール。
+   - ファイアウォール: 外向きは **80/443 のみ**（管理用 SSH は IAP トンネルや限定 IP 推奨）。
+5. **Secret Manager**
+   - `SECRET_KEY`、`JWT_SECRET_KEY`、`DB_PASSWORD`、各種 API キーなどを格納。チームで **シークレット ID の命名規則**を決める（例: `ads-prod-SECRET_KEY`）。
+
+## VM 上のリポジトリと環境変数
+
+```bash
+# リポジトリを配置（方法はチーム方針に合わせる）
+cd /opt/my_ads_platform   # 例
+
+cp env.gcp.example .env
+# .env を編集するか、scripts/gcp/export-secrets-env.sh で Secret Manager から生成
+```
+
+必須の対応:
+
+- `DEBUG=False`
+- `ALLOWED_HOSTS` / `CORS_ALLOWED_ORIGINS` / `FRONTEND_URL` を本番ドメインに合わせる。
+- `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` を Cloud SQL に合わせる。
+- Cloud SQL を **パブリック IP** で接続する場合は `DB_SSLMODE=require` を検討。**プライベート IP のみ**の場合は空のままでよいことが多い。
+
+## フロントエンドのビルド
+
+Nginx はホストの `frontend/build` をマウントします。デプロイ前にビルドしてください。
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+## 初回・更新デプロイ
+
+プロジェクトルートで:
+
+```bash
+# イメージ再ビルドと起動
+docker compose -f docker-compose.gcp.yml --env-file .env build --no-cache
+docker compose -f docker-compose.gcp.yml --env-file .env up -d
+
+# マイグレーション（バックエンドコンテナ）
+docker compose -f docker-compose.gcp.yml --env-file .env run --rm backend python manage.py migrate
+
+# 静的ファイル
+docker compose -f docker-compose.gcp.yml --env-file .env run --rm backend python manage.py collectstatic --noinput
+```
+
+SSL は既存の `nginx` 設定と Let’s Encrypt（`/etc/letsencrypt` のマウント）に依存します。ロードバランサで TLS を終端する場合は、Nginx の listen と `SECURE_PROXY_SSL_HEADER`（`config/settings.py` の本番ブロック）を合わせて調整してください。
+
+## ロールバック
+
+1. 前のリリースの **Git タグ / コミット** にチェックアウト。
+2. `docker compose -f docker-compose.gcp.yml build` のあと `up -d`。
+3. **DB マイグレーションを戻す場合**は `migrate` の逆操作が必要なときだけ `showmigrations` とドキュメントを確認して実行（データ破壊に注意）。
+
+## チーム運用のチェックリスト
+
+- [ ] 本番とステージングで **GCP プロジェクトまたは DB を分離**している。
+- [ ] Secret Manager の **IAM** が最小権限になっている。
+- [ ] **runbook**（障害時の連絡先、ロールバック手順、誰が VM に SSH できるか）が共有されている。
+- [ ] **Cloud Logging**（および任意で Sentry）でエラーと 5xx を監視している。
+
+## 関連ファイル
+
+- `docker-compose.gcp.yml` — Cloud SQL 利用時の Compose（コンテナ内 Postgres なし）。
+- `env.gcp.example` — 本番用環境変数のテンプレート。
+- `scripts/gcp/export-secrets-env.sh` — Secret Manager から `.env` 断片を生成する補助スクリプト。

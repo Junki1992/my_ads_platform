@@ -1,0 +1,90 @@
+# GCP 本番向け: Cloud SQL(PostgreSQL) を利用し、コンテナ内 DB は起動しない。
+# 使い方: cp env.gcp.example .env して値を埋め、フロントをビルドしたうえで
+#   docker compose -f docker-compose.gcp.yml --env-file .env up -d
+#
+# バックエンドはイメージ内のコードを使う（ホストの ./backend をマウントしない）。
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 300
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+    expose:
+      - "8000"
+    depends_on:
+      - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    restart: always
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+      - ./frontend/build:/usr/share/nginx/html:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - app-network
+
+  celery:
+    build: ./backend
+    command: celery -A config worker --loglevel=info --concurrency=2
+    depends_on:
+      - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    restart: always
+    networks:
+      - app-network
+
+  celery-beat:
+    build: ./backend
+    command: celery -A config beat --loglevel=info
+    depends_on:
+      - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    restart: always
+    networks:
+      - app-network
+
+volumes:
+  redis_data:
+  static_volume:
+  media_volume:
+
+networks:
+  app-network:
+    driver: bridge
