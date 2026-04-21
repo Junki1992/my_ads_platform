@@ -26,7 +26,7 @@ const Campaigns: React.FC = () => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
-  const [selectedMetaAccountId, setSelectedMetaAccountId] = useState<number | null>(null);
+  const [selectedMetaAccountIds, setSelectedMetaAccountIds] = useState<number[]>([]);
   
   // ページネーション
   const [currentPage, setCurrentPage] = useState(1);
@@ -756,18 +756,18 @@ const Campaigns: React.FC = () => {
 
   // Meta API からキャンペーンをインポート
   const handleImportFromMeta = async () => {
-    if (!selectedMetaAccountId) {
-      message.error('Meta アカウントを選択してください');
+    if (selectedMetaAccountIds.length === 0) {
+      message.error('Meta アカウントを1つ以上選択してください');
       return;
     }
 
     setLoading(true);
     try {
-      const result = await campaignService.importCampaignsFromMeta(selectedMetaAccountId);
+      const result = await campaignService.importCampaignsFromMeta(selectedMetaAccountIds);
       
       message.success(result.message);
       setImportModalVisible(false);
-      setSelectedMetaAccountId(null);
+      setSelectedMetaAccountIds([]);
       fetchCampaigns();
     } catch (error: any) {
       console.error('Failed to import campaigns:', error);
@@ -1499,18 +1499,21 @@ const Campaigns: React.FC = () => {
         onOk={handleImportFromMeta}
         onCancel={() => {
           setImportModalVisible(false);
-          setSelectedMetaAccountId(null);
+          setSelectedMetaAccountIds([]);
         }}
         okText="インポート"
         cancelText="キャンセル"
         confirmLoading={loading}
       >
-        <p>Meta 広告アカウントを選択してください。選択したアカウントのすべてのキャンペーンがインポートされます。</p>
+        <p>Meta 広告アカウントを選択してください（複数可）。各アカウントのすべてのキャンペーンがインポートされます。</p>
         <Select
+          mode="multiple"
+          allowClear
+          maxTagCount="responsive"
           style={{ width: '100%' }}
           placeholder="Meta アカウントを選択"
-          value={selectedMetaAccountId}
-          onChange={setSelectedMetaAccountId}
+          value={selectedMetaAccountIds}
+          onChange={(ids) => setSelectedMetaAccountIds(ids as number[])}
         >
           {metaAccounts.map(account => (
             <Option key={account.id} value={account.id}>

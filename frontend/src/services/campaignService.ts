@@ -214,16 +214,24 @@ class CampaignService {
     return response.data;
   }
 
-  // Meta API からキャンペーンをインポート
-  async importCampaignsFromMeta(metaAccountId: number): Promise<{
+  // Meta API からキャンペーンをインポート（複数アカウント可）
+  async importCampaignsFromMeta(metaAccountIds: number[]): Promise<{
     status: string;
     imported: number;
     skipped: number;
     total: number;
     message: string;
+    per_account?: Array<{
+      meta_account_id: number;
+      account_name: string;
+      imported: number;
+      skipped: number;
+      total: number;
+      error?: string;
+    }>;
   }> {
     const response = await api.post('/campaigns/campaigns/import_from_meta/', {
-      meta_account_id: metaAccountId
+      meta_account_ids: metaAccountIds,
     });
     return response.data;
   }
