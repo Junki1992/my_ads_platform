@@ -12,10 +12,13 @@
 # 環境変数: DEPLOY_HOST, DEPLOY_ZONE, DEPLOY_DIR, REACT_APP_API_URL（既定は deploy-frontend-only と同じ）
 # SKIP_NPM_BUILD=1  … 直前に手元で build 済みならビルドを飛ばす
 # ==============================================================================
-set -euo pipefail
+set -eo pipefail
+# set -u は付けない（npm / react-scripts 内で未定義変数参照があり nounset で落ちることがある）
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# macOS の tar が xattr 拡張ヘッダを付けないようにする（Linux 側の警告抑止）
+export COPYFILE_DISABLE=1
 
 DEPLOY_HOST="${DEPLOY_HOST:-meta_ads_platform1008@ads-web-prod}"
 DEPLOY_ZONE="${DEPLOY_ZONE:-asia-northeast1-a}"
@@ -77,8 +80,9 @@ echo "[1/4] backend（${#BACKEND_PATHS[@]} ファイル）のみ tar で転送..
   --command="set -e; mkdir -p \"$DEPLOY_DIR\"; cd \"$DEPLOY_DIR\" && tar xzf -"
 
 if [[ -z "${SKIP_NPM_BUILD:-}" ]]; then
-  echo "[2/4] 手元で frontend をビルド（REACT_APP_API_URL=$REACT_APP_API_URL）..."
-  (cd "$ROOT/frontend" && REACT_APP_API_URL="$REACT_APP_API_URL" npm run build)
+  _fe_api_url="${REACT_APP_API_URL:-https://lots-of-love.top/api}"
+  printf '%s\n' "[2/4] 手元で frontend をビルド (REACT_APP_API_URL=${_fe_api_url})..."
+  (cd "$ROOT/frontend" && env REACT_APP_API_URL="${_fe_api_url}" npm run build)
 else
   echo "[2/4] SKIP_NPM_BUILD=1 のためビルド省略（$ROOT/frontend/build をそのまま使う）"
   if [[ ! -f "$ROOT/frontend/build/index.html" ]]; then
