@@ -29,12 +29,19 @@ class CampaignSerializer(serializers.ModelSerializer):
 
 
 class CampaignListSerializer(serializers.ModelSerializer):
-    """キャンペーン一覧用の簡易シリアライザー"""
+    """キャンペーン一覧用の簡易シリアライザー（Meta 広告アカウント・ビジネス情報は一覧・レポートのグループ用）"""
+    meta_account_name = serializers.ReadOnlyField(source='meta_account.account_name')
+    meta_account_id_str = serializers.ReadOnlyField(source='meta_account.account_id')
+    meta_business_name = serializers.ReadOnlyField(source='meta_account.business_name')
+    meta_business_id = serializers.ReadOnlyField(source='meta_account.business_id')
+
     class Meta:
         model = Campaign
         fields = [
             'id', 'campaign_id', 'name', 'objective', 'status',
-            'budget', 'budget_type', 'start_date', 'end_date'
+            'budget', 'budget_type', 'start_date', 'end_date',
+            'meta_account', 'meta_account_name', 'meta_account_id_str',
+            'meta_business_name', 'meta_business_id',
         ]
 
 

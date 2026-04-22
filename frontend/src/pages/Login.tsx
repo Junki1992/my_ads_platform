@@ -60,7 +60,7 @@ const Login: React.FC = () => {
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
         errorMessage = 'リクエストがタイムアウトしました。サーバーに接続できません。';
       } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-        errorMessage = 'ネットワークエラーが発生しました。バックエンドサーバーが起動しているか確認してください。';
+        errorMessage = 'バックエンドに接続できません。backend で python manage.py runserver を起動してください。';
       } else if (error.response) {
         errorMessage = error.response?.data?.error || 
                       error.response?.data?.detail || 

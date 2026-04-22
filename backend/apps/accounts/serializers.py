@@ -76,10 +76,16 @@ class MetaAccountSerializer(serializers.ModelSerializer):
     """Meta アカウントシリアライザー"""
     class Meta:
         model = MetaAccount
-        fields = ['id', 'account_id', 'account_name', 'access_token', 'is_active', 'created_at', 'updated_at']
+        fields = [
+            'id', 'account_id', 'account_name',
+            'business_id', 'business_name',
+            'access_token', 'is_active', 'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
-            'access_token': {'write_only': True}  # セキュリティのため読み取り時は返さない
+            'access_token': {'write_only': True},
+            'business_id': {'required': False, 'allow_blank': True},
+            'business_name': {'required': False, 'allow_blank': True},
         }
 
 

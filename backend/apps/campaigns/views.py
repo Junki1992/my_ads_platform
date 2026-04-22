@@ -54,7 +54,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=search) | Q(campaign_id__icontains=search)
             )
         
-        return queryset.order_by('-created_at')
+        return queryset.select_related('meta_account').order_by('-created_at')
     
     def perform_create(self, serializer):
         """キャンペーン作成時にユーザーとMetaアカウントを設定"""
@@ -1084,14 +1084,46 @@ class CampaignViewSet(viewsets.ModelViewSet):
         campaigns = Campaign.objects.filter(user=user).exclude(status__in=['DELETED', 'ARCHIVED'])
         
         # クエリパラメータから取得
+        campaign_ids_raw = request.GET.get('campaign_ids')
         campaign_id = request.GET.get('campaign_id', None)
         start_date_str = request.GET.get('start_date', None)
         end_date_str = request.GET.get('end_date', None)
         metrics = request.GET.get('metrics', 'impressions,clicks,spend').split(',')
         
-        # キャンペーンフィルタリング
-        if campaign_id and campaign_id != 'all':
-            campaigns = campaigns.filter(id=campaign_id)
+        # キャンペーンフィルタリング（複数: campaign_ids=1,2,3 または単一 campaign_id）
+        id_list = []
+        if campaign_ids_raw:
+            for part in str(campaign_ids_raw).split(','):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    id_list.append(int(part))
+                except ValueError:
+                    pass
+        elif campaign_id and str(campaign_id) != 'all':
+            try:
+                id_list.append(int(campaign_id))
+            except ValueError:
+                pass
+        if id_list:
+            campaigns = campaigns.filter(id__in=id_list)
+
+        campaigns = campaigns.select_related('meta_account')
+
+        def _reporting_campaign_meta_payload(c):
+            ma = getattr(c, 'meta_account', None)
+            if ma is None:
+                return {
+                    'meta_account': None,
+                    'meta_account_name': '',
+                    'meta_account_id_str': '',
+                }
+            return {
+                'meta_account': ma.id,
+                'meta_account_name': ma.account_name or '',
+                'meta_account_id_str': str(ma.account_id or ''),
+            }
         
         # 日付範囲のデフォルト値（過去30日）
         if not start_date_str or not end_date_str:
@@ -1120,8 +1152,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     'level': 'campaign'
                 }
                 
-                # タイムアウトを2秒に短縮（並列処理のため）
-                response = requests.get(insights_url, headers=headers, params=params, timeout=2)
+                # Meta 応答遅延でタイムアウトしがちなため 15 秒（並列は max_workers で抑える）
+                response = requests.get(insights_url, headers=headers, params=params, timeout=15)
                 
                 if response.status_code == 200:
                     insights_data = response.json()
@@ -1258,6 +1290,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'reach': insights.get('reach', 0),
                         'frequency': insights.get('frequency', 0),
                         'conversions': insights.get('conversions', 0),
+                        **_reporting_campaign_meta_payload(campaign),
                     }
                 elif campaign.status == 'ACTIVE':
                     # アクティブなキャンペーンの場合、データがない場合は0を返す（デフォルト値は使わない）
@@ -1275,6 +1308,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'reach': 0,
                         'frequency': 0,
                         'conversions': 0,
+                        **_reporting_campaign_meta_payload(campaign),
                     }
                 else:
                     # 一時停止やその他のステータスの場合は0
@@ -1292,6 +1326,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'reach': 0,
                         'frequency': 0,
                         'conversions': 0,
+                        **_reporting_campaign_meta_payload(campaign),
                     }
                 
                 reporting_data.append(campaign_data)
@@ -1314,6 +1349,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'reach': 0,
                         'frequency': 0,
                         'conversions': 0,
+                        **_reporting_campaign_meta_payload(campaign),
                     }
                 else:
                     campaign_data = {
@@ -1330,6 +1366,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                         'reach': 0,
                         'frequency': 0,
                         'conversions': 0,
+                        **_reporting_campaign_meta_payload(campaign),
                     }
                 
                 reporting_data.append(campaign_data)

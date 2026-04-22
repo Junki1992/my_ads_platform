@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Modal, Alert, Tabs, Badge, message, Typography } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Modal, Alert, Tabs, Badge, message, Typography, Collapse } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
@@ -8,6 +8,7 @@ import twoFactorService from '../services/twoFactorService';
 import { EditOutlined, DeleteOutlined, SaveOutlined, SwapOutlined, PlusOutlined, CheckCircleOutlined, SafetyOutlined, CloudOutlined } from '@ant-design/icons';
 import TwoFactorSetup from '../components/TwoFactorSetup';
 import TwoFactorDisable from '../components/TwoFactorDisable';
+import { groupByMetaBusiness } from '../utils/metaAccountBusinessGroups';
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -38,23 +39,38 @@ const Settings: React.FC = () => {
   const [tokenExchangeModalVisible, setTokenExchangeModalVisible] = useState(false);
   const [exchanging, setExchanging] = useState(false);
   const [longLivedToken, setLongLivedToken] = useState('');
-  
+  const [isValidatingLongLivedToken, setIsValidatingLongLivedToken] = useState(false);
+
   // Fetch Accounts Modal
   const [fetchedAccounts, setFetchedAccounts] = useState<MetaAdAccount[]>([]);
   const [fetchingAccounts, setFetchingAccounts] = useState(false);
-  const [selectedFetchedAccount, setSelectedFetchedAccount] = useState<MetaAdAccount | null>(null);
   const [tokenInfo, setTokenInfo] = useState<any>(null);
+
+  const watchedSelectedAccounts = Form.useWatch('selected_account', metaAccountForm);
+  const selectedFetchedAccountIds = useMemo((): string[] => {
+    const w = watchedSelectedAccounts;
+    if (w === undefined || w === null) return [];
+    return Array.isArray(w) ? w : [w];
+  }, [watchedSelectedAccounts]);
+
+  const registeredMetaAccountIds = useMemo(
+    () => new Set(metaAccounts.map((m) => m.account_id)),
+    [metaAccounts]
+  );
   
   // 2FA関連
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorSetupVisible, setTwoFactorSetupVisible] = useState(false);
   const [twoFactorDisableVisible, setTwoFactorDisableVisible] = useState(false);
   
-  // 削除確認モーダル
+  // 削除確認モーダル（1件 or 複数）
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState<MetaAccount | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<MetaAccount[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
+  const [selectedMetaAccountIds, setSelectedMetaAccountIds] = useState<number[]>([]);
+  /** Meta 一覧 Collapse：データ後から入るので defaultActiveKey ではなく制御する */
+  const [metaCollapseActiveKeys, setMetaCollapseActiveKeys] = useState<string[]>([]);
 
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -211,27 +227,69 @@ const Settings: React.FC = () => {
   };
 
   const handleMetaAccountSubmit = async (values: any) => {
-    if (!selectedFetchedAccount) return;
-    
+    const raw = values.selected_account;
+    const ids: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    if (ids.length === 0) return;
+
     setLoading(true);
     try {
-      const createData: MetaAccountCreate = {
-        account_id: selectedFetchedAccount.account_id,
-        account_name: selectedFetchedAccount.name,
-        access_token: values.access_token,
-      };
-
       if (editingAccount) {
+        if (ids.length !== 1) {
+          message.error(t('selectAccountRequired'));
+          return;
+        }
+        const acc = fetchedAccounts.find((a) => a.account_id === ids[0]);
+        if (!acc) return;
+        const createData: MetaAccountCreate = {
+          account_id: acc.account_id,
+          account_name: acc.name,
+          access_token: values.access_token,
+          business_id: acc.business_id,
+          business_name: acc.business_name,
+        };
         await metaAccountService.updateMetaAccount(editingAccount.id, createData);
+        message.success(t('saveApiSettings'));
       } else {
-        await metaAccountService.createMetaAccount(createData);
+        let successCount = 0;
+        const failures: string[] = [];
+        for (const accountId of ids) {
+          const acc = fetchedAccounts.find((a) => a.account_id === accountId);
+          if (!acc) continue;
+          try {
+            await metaAccountService.createMetaAccount({
+              account_id: acc.account_id,
+              account_name: acc.name,
+              access_token: values.access_token,
+              business_id: acc.business_id,
+              business_name: acc.business_name,
+            });
+            successCount += 1;
+          } catch (err: any) {
+            const detail =
+              err.response?.data?.account_id?.[0] ||
+              err.response?.data?.detail ||
+              err.response?.data?.error ||
+              err.message;
+            failures.push(`${acc.name}: ${detail}`);
+          }
+        }
+        if (successCount > 0) {
+          message.success(t('metaAccountsBulkRegisterSuccess', { count: successCount }));
+        }
+        if (failures.length > 0) {
+          message.warning(
+            t('metaAccountsBulkRegisterFailures', {
+              count: failures.length,
+              detail: failures.slice(0, 5).join(' / '),
+            })
+          );
+        }
       }
 
       setIsModalVisible(false);
       metaAccountForm.resetFields();
       setEditingAccount(null);
       setFetchedAccounts([]);
-      setSelectedFetchedAccount(null);
       setTokenInfo(null);
       loadMetaAccounts();
     } catch (error) {
@@ -243,34 +301,55 @@ const Settings: React.FC = () => {
 
   const handleEditMetaAccount = (account: MetaAccount) => {
     setEditingAccount(account);
+    metaAccountForm.resetFields();
+    setFetchedAccounts([]);
+    setTokenInfo(null);
     setIsModalVisible(true);
   };
 
   const handleDeleteClick = (account: MetaAccount) => {
-    setDeletingAccount(account);
+    setDeleteTargets([account]);
+    setDeletePassword('');
+    setDeleteModalVisible(true);
+  };
+
+  const handleBulkDeleteClick = () => {
+    const rows = metaAccounts.filter((a) => selectedMetaAccountIds.includes(a.id));
+    if (rows.length === 0) return;
+    setDeleteTargets(rows);
     setDeletePassword('');
     setDeleteModalVisible(true);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingAccount) return;
-    
+    if (deleteTargets.length === 0) return;
+
     if (!deletePassword) {
       message.error('パスワードを入力してください');
       return;
     }
-    
+
     setDeleting(true);
     try {
-      const response = await metaAccountService.deleteMetaAccount(deletingAccount.id, deletePassword);
-      message.success(response.message || 'アカウントを削除しました');
+      if (deleteTargets.length === 1) {
+        const response = await metaAccountService.deleteMetaAccount(deleteTargets[0].id, deletePassword);
+        message.success(response.message || 'アカウントを削除しました');
+      } else {
+        const response = await metaAccountService.bulkDeleteMetaAccounts(
+          deleteTargets.map((a) => a.id),
+          deletePassword
+        );
+        message.success(response.message || t('metaAccountsBulkDeleteSuccess', { count: response.deleted }));
+      }
       setDeleteModalVisible(false);
-      setDeletingAccount(null);
+      setDeleteTargets([]);
       setDeletePassword('');
+      setSelectedMetaAccountIds([]);
       loadMetaAccounts();
     } catch (error: any) {
-      console.error('Failed to delete Meta account:', error);
-      const errorMessage = error.response?.data?.error || 'アカウントの削除に失敗しました';
+      console.error('Failed to delete Meta account(s):', error);
+      const errorMessage =
+        error.response?.data?.error || error.response?.data?.detail || 'アカウントの削除に失敗しました';
       message.error(errorMessage);
     } finally {
       setDeleting(false);
@@ -316,13 +395,27 @@ const Settings: React.FC = () => {
 
   const handleValidateToken = async () => {
     if (!longLivedToken) return;
-    
+    setIsValidatingLongLivedToken(true);
     try {
-      const response = await metaAccountService.validateToken();
-      console.log('Token validation result:', response);
-      // Show validation result to user
-    } catch (error) {
+      const response = await metaAccountService.validateToken(longLivedToken);
+      if (response.valid) {
+        message.success(
+          t('tokenValidationSuccess', {
+            name: response.user_name || response.user_id || '—',
+          })
+        );
+      } else {
+        message.error(response.error || t('tokenValidationFailed'));
+      }
+    } catch (error: any) {
+      const errMsg =
+        error?.response?.data?.error ||
+        error?.response?.data?.detail ||
+        error?.message;
+      message.error(errMsg || t('tokenValidationFailed'));
       console.error('Token validation failed:', error);
+    } finally {
+      setIsValidatingLongLivedToken(false);
     }
   };
 
@@ -336,31 +429,37 @@ const Settings: React.FC = () => {
   };
 
   const handleFetchAccounts = async () => {
-    const accessToken = metaAccountForm.getFieldValue('access_token');
-    if (!accessToken) return;
+    const raw = metaAccountForm.getFieldValue('access_token');
+    const accessToken = typeof raw === 'string' ? raw.trim() : '';
+    if (!accessToken) {
+      message.warning(t('enterAccessToken'));
+      return;
+    }
 
     setFetchingAccounts(true);
     try {
       const response = await metaAccountService.fetchAccounts(accessToken);
       setFetchedAccounts(response.accounts);
       setTokenInfo(response.token_info);
-    } catch (error) {
+      metaAccountForm.setFieldsValue({
+        selected_account: editingAccount ? undefined : [],
+      });
+      if (response.accounts?.length) {
+        message.success(t('fetchAccountsSuccess', { count: response.accounts.length }));
+      } else {
+        message.info(t('fetchAccountsEmpty'));
+      }
+    } catch (error: any) {
       console.error('Failed to fetch accounts:', error);
       setFetchedAccounts([]);
       setTokenInfo(null);
+      const errMsg =
+        error?.response?.data?.error ||
+        error?.response?.data?.detail ||
+        error?.message;
+      message.error(errMsg || t('fetchAccountsError'));
     } finally {
       setFetchingAccounts(false);
-    }
-  };
-
-  const handleSelectFetchedAccount = (accountId: string) => {
-    const account = fetchedAccounts.find(acc => acc.account_id === accountId);
-    if (account) {
-      setSelectedFetchedAccount(account);
-      metaAccountForm.setFieldsValue({
-        account_id: account.account_id,
-        account_name: account.name
-      });
     }
   };
 
@@ -381,7 +480,21 @@ const Settings: React.FC = () => {
     return { text: t('daysRemaining', { count: daysRemaining }), color: 'green' };
   };
 
-  const columns = [
+  const metaAccountGroups = useMemo(
+    () => groupByMetaBusiness(metaAccounts, t('metaAccountsGroupNoBusiness')),
+    [metaAccounts, t]
+  );
+
+  const metaAccountGroupKeySet = useMemo(
+    () => new Set(metaAccountGroups.map((g) => g.key)),
+    [metaAccountGroups]
+  );
+
+  useEffect(() => {
+    setMetaCollapseActiveKeys((prev) => prev.filter((k) => metaAccountGroupKeySet.has(k)));
+  }, [metaAccountGroupKeySet]);
+
+  const metaAccountRowColumns = [
     {
       title: t('accountName'),
       dataIndex: 'account_name',
@@ -406,12 +519,13 @@ const Settings: React.FC = () => {
       title: t('creationDate'),
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleDateString(i18n.language === 'ja' ? 'ja-JP' : 'en-US'),
+      render: (date: string) =>
+        new Date(date).toLocaleDateString(i18n.language === 'ja' ? 'ja-JP' : 'en-US'),
     },
     {
       title: t('actions'),
       key: 'action',
-      render: (_: any, record: MetaAccount) => (
+      render: (_: unknown, record: MetaAccount) => (
         <Space>
           <Button
             type="link"
@@ -428,9 +542,9 @@ const Settings: React.FC = () => {
           >
             {t('edit')}
           </Button>
-          <Button 
-            type="link" 
-            danger 
+          <Button
+            type="link"
+            danger
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteClick(record)}
           >
@@ -654,22 +768,96 @@ const Settings: React.FC = () => {
                 setEditingAccount(null);
                 metaAccountForm.resetFields();
                 setFetchedAccounts([]);
-                setSelectedFetchedAccount(null);
                 setTokenInfo(null);
                 setIsModalVisible(true);
+                if (longLivedToken) {
+                  metaAccountForm.setFieldsValue({ access_token: longLivedToken });
+                }
               }}
             >
               <span className="button-text">+ {t('addMetaAccount')}</span>
             </Button>
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedMetaAccountIds.length === 0}
+              onClick={handleBulkDeleteClick}
+            >
+              <span className="button-text">{t('metaAccountsBulkDelete')}</span>
+            </Button>
           </Space>
         </div>
 
-        <Table
-          columns={columns}
-          dataSource={metaAccounts}
-          rowKey="id"
-          pagination={{ pageSize: 5 }}
-        />
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {t('metaAccountsGroupedHint')}
+        </Typography.Paragraph>
+
+        {metaAccounts.length === 0 ? (
+          <Table<MetaAccount>
+            columns={metaAccountRowColumns}
+            dataSource={[]}
+            rowKey="id"
+            pagination={false}
+            locale={{ emptyText: t('metaAccountNotRegistered') }}
+          />
+        ) : (
+          <Collapse
+            bordered
+            activeKey={metaCollapseActiveKeys}
+            onChange={(k) =>
+              setMetaCollapseActiveKeys(Array.isArray(k) ? k : k != null ? [String(k)] : [])
+            }
+            style={{ background: '#fafafa' }}
+            items={metaAccountGroups.map((g) => ({
+              key: g.key,
+              label: (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'baseline',
+                    gap: 8,
+                    width: '100%',
+                    paddingRight: 8,
+                  }}
+                >
+                  <Typography.Text strong>{g.title}</Typography.Text>
+                  {g.subtitle ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                      {g.subtitle}
+                    </Typography.Text>
+                  ) : null}
+                  <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
+                    {t('metaAccountsInGroup', { count: g.accounts.length })}
+                  </Typography.Text>
+                </div>
+              ),
+              children: (() => {
+                const inGroup = new Set(g.accounts.map((a) => a.id));
+                return (
+                  <Table<MetaAccount>
+                    rowSelection={{
+                      selectedRowKeys: selectedMetaAccountIds.filter((id) => inGroup.has(id)),
+                      onChange: (keys) => {
+                        const picked = keys.map((k) => Number(k));
+                        setSelectedMetaAccountIds((prev) => {
+                          const rest = prev.filter((id) => !inGroup.has(id));
+                          return [...rest, ...picked];
+                        });
+                      },
+                      columnWidth: 40,
+                    }}
+                    columns={metaAccountRowColumns}
+                    dataSource={g.accounts}
+                    rowKey="id"
+                    pagination={g.accounts.length > 8 ? { pageSize: 8 } : false}
+                    size="small"
+                  />
+                );
+              })(),
+            }))}
+          />
+        )}
       </Card>
 
       <Card 
@@ -777,7 +965,6 @@ const Settings: React.FC = () => {
           metaAccountForm.resetFields();
           setEditingAccount(null);
           setFetchedAccounts([]);
-          setSelectedFetchedAccount(null);
           setTokenInfo(null);
         }}
         footer={null}
@@ -851,44 +1038,85 @@ const Settings: React.FC = () => {
               />
               
               <Form.Item 
-                label={t('selectAccount')}
+                label={editingAccount ? t('selectAccount') : t('selectAccountsMultiple')}
                 name="selected_account"
-                rules={[{ required: true, message: t('selectAccountRequired') }]}
+                rules={[
+                  {
+                    validator: (_: unknown, value: string | string[] | undefined) => {
+                      if (editingAccount) {
+                        return value
+                          ? Promise.resolve()
+                          : Promise.reject(new Error(t('selectAccountRequired')));
+                      }
+                      if (Array.isArray(value) && value.length > 0) return Promise.resolve();
+                      return Promise.reject(new Error(t('selectAccountRequired')));
+                    },
+                  },
+                ]}
               >
                 <Select 
+                  mode={editingAccount ? undefined : 'multiple'}
                   placeholder={t('selectAccountPlaceholder')} 
-                  onChange={handleSelectFetchedAccount}
                   size="large"
                   optionLabelProp="label"
+                  allowClear
+                  maxTagCount="responsive"
                 >
-                  {fetchedAccounts.map(account => (
-                    <Option 
-                      key={account.account_id} 
-                      value={account.account_id}
-                      label={account.name}
-                    >
-                      <div style={{ padding: '8px 0' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
-                          {account.name}
+                  {fetchedAccounts.map((account) => {
+                    const alreadyRegistered = registeredMetaAccountIds.has(account.account_id);
+                    const isEditingThis =
+                      !!editingAccount && editingAccount.account_id === account.account_id;
+                    return (
+                      <Option 
+                        key={account.account_id} 
+                        value={account.account_id}
+                        label={account.name}
+                        disabled={alreadyRegistered && !isEditingThis}
+                      >
+                        <div style={{ padding: '8px 0' }}>
+                          <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                            {account.name}
+                            {alreadyRegistered && !isEditingThis && (
+                              <span style={{ color: '#999', fontWeight: 'normal', marginLeft: 8 }}>
+                                ({t('metaAccountAlreadyRegistered')})
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            {account.business_name ? (
+                              <span>{t('metaBusinessParent')}: {account.business_name} · </span>
+                            ) : null}
+                            ID: {account.account_id} | {account.currency} | {account.timezone}
+                            {account.status !== 1 && <span style={{ color: 'orange', marginLeft: 8 }}>⚠ {t('inactiveStatus')}</span>}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          ID: {account.account_id} | {account.currency} | {account.timezone}
-                          {account.status !== 1 && <span style={{ color: 'orange', marginLeft: 8 }}>⚠ {t('inactiveStatus')}</span>}
-                        </div>
-                      </div>
-                    </Option>
-                  ))}
+                      </Option>
+                    );
+                  })}
                 </Select>
               </Form.Item>
 
-              {selectedFetchedAccount && (
+              {selectedFetchedAccountIds.length > 0 && (
                 <Alert
                   message={t('selectedAccount')}
                   description={
                     <div style={{ lineHeight: 1.8 }}>
-                      <div><strong>{selectedFetchedAccount.name}</strong></div>
-                      <div>ID: {selectedFetchedAccount.account_id}</div>
-                      <div>{t('currency')}: {selectedFetchedAccount.currency} | {t('timezone')}: {selectedFetchedAccount.timezone}</div>
+                      {selectedFetchedAccountIds.map((id) => {
+                        const acc = fetchedAccounts.find((a) => a.account_id === id);
+                        if (!acc) return null;
+                        return (
+                          <div key={id} style={{ marginBottom: 8 }}>
+                            <div><strong>{acc.name}</strong></div>
+                            {acc.business_name ? (
+                              <div>
+                                {t('metaBusinessParent')}: {acc.business_name}
+                              </div>
+                            ) : null}
+                            <div>ID: {acc.account_id}</div>
+                            <div>{t('currency')}: {acc.currency} | {t('timezone')}: {acc.timezone}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   }
                   type="info"
@@ -906,7 +1134,6 @@ const Settings: React.FC = () => {
                 metaAccountForm.resetFields();
                 setEditingAccount(null);
                 setFetchedAccounts([]);
-                setSelectedFetchedAccount(null);
                 setTokenInfo(null);
               }}>
                 {t('cancel')}
@@ -915,10 +1142,10 @@ const Settings: React.FC = () => {
                 type="primary" 
                 htmlType="submit" 
                 loading={loading}
-                disabled={!selectedFetchedAccount}
+                disabled={selectedFetchedAccountIds.length === 0}
                 size="large"
               >
-                {t('addThisAccount')}
+                {editingAccount ? t('saveApiSettings') : t('addSelectedMetaAccounts')}
               </Button>
             </Space>
           </Form.Item>
@@ -1002,7 +1229,7 @@ const Settings: React.FC = () => {
               <Button onClick={() => copyToClipboard(longLivedToken)}>
                 {t('copyToClipboard')}
               </Button>
-              <Button onClick={handleValidateToken}>
+              <Button onClick={handleValidateToken} loading={isValidatingLongLivedToken}>
                 {t('validateToken')}
               </Button>
             </Space>
@@ -1035,14 +1262,14 @@ const Settings: React.FC = () => {
         open={deleteModalVisible}
         onCancel={() => {
           setDeleteModalVisible(false);
-          setDeletingAccount(null);
+          setDeleteTargets([]);
         }}
         footer={[
           <Button 
             key="cancel" 
             onClick={() => {
               setDeleteModalVisible(false);
-              setDeletingAccount(null);
+              setDeleteTargets([]);
             }}
           >
             キャンセル
@@ -1054,26 +1281,37 @@ const Settings: React.FC = () => {
             loading={deleting}
             onClick={handleDeleteConfirm}
           >
-            削除する
+            {deleteTargets.length > 1 ? t('metaAccountsBulkDeleteConfirm') : t('delete')}
           </Button>,
         ]}
         width={600}
       >
-        {deletingAccount && (
+        {deleteTargets.length > 0 && (
           <div>
             <Alert
-              message="以下のアカウントを削除しようとしています"
+              message={
+                deleteTargets.length > 1
+                  ? t('metaAccountsBulkDeleteWarning', { count: deleteTargets.length })
+                  : t('metaAccountDeleteWarningSingle')
+              }
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
             />
             
-            <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fafafa' }}>
-              <Typography.Text strong>アカウント名：</Typography.Text>
-              <Typography.Text>{deletingAccount.account_name}</Typography.Text>
-              <br />
-              <Typography.Text strong>アカウントID：</Typography.Text>
-              <Typography.Text>{deletingAccount.account_id}</Typography.Text>
+            <Card
+              size="small"
+              style={{ marginBottom: 16, backgroundColor: '#fafafa', maxHeight: 220, overflow: 'auto' }}
+            >
+              {deleteTargets.map((acc) => (
+                <div key={acc.id} style={{ marginBottom: deleteTargets.length > 1 ? 10 : 0 }}>
+                  <Typography.Text strong>{t('accountName')}:</Typography.Text>{' '}
+                  <Typography.Text>{acc.account_name}</Typography.Text>
+                  <br />
+                  <Typography.Text strong>{t('accountId')}:</Typography.Text>{' '}
+                  <Typography.Text>{acc.account_id}</Typography.Text>
+                </div>
+              ))}
             </Card>
 
             <Alert

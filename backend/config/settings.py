@@ -3,6 +3,8 @@ from pathlib import Path
 from decouple import config
 from datetime import timedelta
 
+from celery.schedules import crontab
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
@@ -43,7 +45,7 @@ INSTALLED_APPS = [
     'apps.bulk_upload',
     'apps.alerts',
     'apps.automation',
-    'apps.reporting',
+    'apps.reporting.apps.ReportingConfig',
     'apps.integrations',
     'apps.i18n',
     'apps.help',
@@ -176,6 +178,14 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_TASK_SOFT_TIME_LIMIT = 60
 
+# 日次 Meta 広告インサイト（前日分・JST 6:00）
+CELERY_BEAT_SCHEDULE = {
+    'daily-meta-ad-insights': {
+        'task': 'apps.reporting.tasks.fetch_daily_meta_ad_insights',
+        'schedule': crontab(hour=6, minute=0),
+    },
+}
+
 # Meta API設定
 META_APP_ID = config('META_APP_ID', default='')
 META_APP_SECRET = config('META_APP_SECRET', default='')
@@ -228,7 +238,8 @@ SIMPLE_JWT = {
 # セキュリティ設定
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
+    # 本番は True 推奨。DEBUG=False のまま runserver で HTTP のみ使う場合は .env で False
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True

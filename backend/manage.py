@@ -5,7 +5,9 @@ import sys
 
 if __name__ == '__main__':
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    # ローカルでは settings_dev（DEBUG・CORS・SSL リダイレクトが開発向け）。
+    # 本番は Docker / wsgi が DJANGO_SETTINGS_MODULE=config.settings を上書きする。
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings_dev')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

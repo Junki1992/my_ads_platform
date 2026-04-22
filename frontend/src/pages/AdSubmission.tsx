@@ -46,6 +46,7 @@ import {
 import campaignService from '../services/campaignService';
 import metaAccountService from '../services/metaAccountService';
 import boxAccountService, { BoxAccount, BoxFile } from '../services/boxAccountService';
+import { API_BASE_URL } from '../services/api';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -2256,7 +2257,7 @@ const AdSubmission: React.FC<AdSubmissionProps> = () => {
                   thumbnailUrl = file.thumbnail_url;
                 } else {
                   // 相対パスの場合、/api/で始まっている場合は/api/を削除してから結合（重複を防ぐ）
-                  const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+                  const baseUrl = API_BASE_URL;
                   let path = file.thumbnail_url;
                   // /api/で始まる場合は削除（baseUrlに既に/api/が含まれているため）
                   if (path.startsWith('/api/')) {

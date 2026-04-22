@@ -1,9 +1,22 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+
+def root(request):
+    """API のルート。ブラウザで http://127.0.0.1:8000/ を開いたとき用。"""
+    return JsonResponse(
+        {
+            'service': 'my-ads-platform-api',
+            'hint': 'Web UI はフロントを起動して http://127.0.0.1:3000 を開いてください。',
+        }
+    )
+
+
 urlpatterns = [
+    path('', root),
     path('admin/', admin.site.urls),
     path('api/accounts/', include('apps.accounts.urls')),
     path('api/campaigns/', include('apps.campaigns.urls')),
@@ -16,7 +29,6 @@ urlpatterns = [
     path('api/i18n/', include('apps.i18n.urls')),
     path('api/help/', include('apps.help.urls')),
     path('api/demo/', include('apps.demo.urls')),
-    path('', include('apps.demo.urls')),  # ルートURLを追加
 ]
 
 # 課金機能（環境変数で制御）

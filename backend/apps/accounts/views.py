@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -27,6 +29,103 @@ from .two_factor_serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+GRAPH_VERSION = 'v18.0'
+
+
+def _graph_adaccount_path(account_id) -> str:
+    s = str(account_id).strip()
+    if s.startswith('act_'):
+        return s
+    return f'act_{s}'
+
+
+def _parse_business_from_adaccount_node(node: dict) -> Tuple[str, str]:
+    """Graph の ad account 等に付随する business オブジェクトから id/name を取り出す。"""
+    if not node or not isinstance(node, dict):
+        return '', ''
+    biz = node.get('business')
+    if not biz or not isinstance(biz, dict):
+        return '', ''
+    bid = biz.get('id')
+    bname = biz.get('name')
+    return (str(bid) if bid is not None else ''), (str(bname) if bname is not None else '')
+
+
+def _fetch_business_for_adaccount(access_token: str, account_id) -> Tuple[str, str]:
+    """
+    広告アカウントに紐づく Meta ビジネス（1つ上の階層）を Graph から取得。
+    取得できない場合は空タプル。
+    """
+    act = _graph_adaccount_path(account_id)
+    url = f'https://graph.facebook.com/{GRAPH_VERSION}/{act}'
+    try:
+        r = requests.get(
+            url,
+            params={'access_token': access_token, 'fields': 'business{name}'},
+            timeout=30,
+        )
+        data = r.json()
+    except OSError as e:
+        logger.warning('fetch business for ad account failed: %s', e)
+        return '', ''
+    if r.status_code != 200 or 'error' in data:
+        return '', ''
+    return _parse_business_from_adaccount_node(data)
+
+
+def _is_business_field_permission_error(data: dict) -> bool:
+    """
+    /me/adaccounts?fields=...,business{...} が (#100) Requires business_management permission
+    などで落ちるときの判定。トークンに ads 系だけ付いていて business フィールドが取れないケース。
+    """
+    if not data or not isinstance(data, dict):
+        return False
+    err = data.get('error')
+    if not isinstance(err, dict):
+        return False
+    msg = err.get('message') or ''
+    if 'business_management' in msg and 'field' in msg.lower():
+        return True
+    if err.get('code') == 100 and 'business' in msg.lower() and 'permission' in msg.lower():
+        return True
+    return False
+
+
+def _graph_me_adaccounts_json(access_token: str) -> dict:
+    """
+    GET /me/adaccounts。まず business{name} 付きで試し、ビジネス欄の権限不足なら
+    business なしで再試行（広告アカウント一覧は取得可能なことが多い）。
+    """
+    url = f'https://graph.facebook.com/{GRAPH_VERSION}/me/adaccounts'
+    base_fields = 'id,name,account_id,currency,timezone_name,account_status'
+    try:
+        r1 = requests.get(
+            url,
+            params={'access_token': access_token, 'fields': f'{base_fields},business{{name}}'},
+            timeout=30,
+        )
+        d1 = r1.json()
+    except OSError as e:
+        logger.warning('me/adaccounts request failed: %s', e)
+        return {'error': {'message': str(e)}}
+    if isinstance(d1, dict) and 'data' in d1:
+        return d1
+    if _is_business_field_permission_error(d1):
+        logger.info(
+            'me/adaccounts: business field not permitted, retrying without business field'
+        )
+        try:
+            r2 = requests.get(
+                url,
+                params={'access_token': access_token, 'fields': base_fields},
+                timeout=30,
+            )
+            return r2.json()
+        except OSError as e:
+            logger.warning('me/adaccounts retry failed: %s', e)
+            return d1
+    return d1
 
 
 class AuthViewSet(viewsets.GenericViewSet):
@@ -403,7 +502,66 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         return Response({
             'message': f'{account_name} を削除しました'
         }, status=status.HTTP_200_OK)
-    
+
+    @action(detail=False, methods=['post'])
+    def bulk_delete(self, request):
+        """Meta 広告アカウントを複数まとめて削除（ログインパスワード必須）"""
+        password = request.data.get('password')
+        ids_raw = request.data.get('ids')
+
+        if not password:
+            return Response(
+                {'error': 'パスワードの入力が必要です'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(ids_raw, list) or len(ids_raw) == 0:
+            return Response(
+                {'error': 'ids は1件以上の整数配列で指定してください'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            ids = [int(x) for x in ids_raw]
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'ids の要素は整数にしてください'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not request.user.check_password(password):
+            return Response(
+                {'error': 'パスワードが正しくありません'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        ids_unique = list(dict.fromkeys(ids))
+        qs = MetaAccount.objects.filter(user=request.user, id__in=ids_unique)
+        found_ids = set(qs.values_list('id', flat=True))
+        if found_ids != set(ids_unique):
+            return Response(
+                {
+                    'error': '一部のIDが見つからないか、権限がありません',
+                    'invalid_ids': sorted(set(ids_unique) - found_ids),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        names = list(qs.values_list('account_name', flat=True))
+        n = qs.count()
+        qs.delete()
+        logger.info(
+            'Meta accounts bulk deleted: count=%s user=%s names=%s',
+            n,
+            request.user.email,
+            names[:20],
+        )
+        return Response(
+            {
+                'message': f'{n}件のMetaアカウントを削除しました',
+                'deleted': n,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=False, methods=['post'])
     def exchange_token(self, request):
         """短期トークンを長期トークンに変換"""
@@ -698,15 +856,8 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 logger.error("Failed to get user info from Meta")
                 return redirect(f"{frontend_url}/settings?error=user_info_failed")
             
-            # 広告アカウント一覧を取得
-            accounts_url = 'https://graph.facebook.com/v18.0/me/adaccounts'
-            accounts_params = {
-                'access_token': long_access_token,
-                'fields': 'id,name,account_id,currency,timezone_name,account_status'
-            }
-            
-            accounts_response = requests.get(accounts_url, params=accounts_params)
-            accounts_data = accounts_response.json()
+            # 広告アカウント一覧（business フィールドはトークンによっては権限不足 → フォールバックあり）
+            accounts_data = _graph_me_adaccounts_json(long_access_token)
             
             # 特定のアカウントを更新するか、全アカウントを保存するかを判定
             saved_accounts = []
@@ -720,6 +871,12 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                     )
                     target_account.access_token = long_access_token
                     target_account.is_active = True
+                    bid, bname = _fetch_business_for_adaccount(
+                        long_access_token, target_account.account_id
+                    )
+                    if bid or bname:
+                        target_account.business_id = bid
+                        target_account.business_name = bname
                     target_account.save()
                     saved_accounts.append(target_account)
                     
@@ -731,6 +888,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 # 全アカウントを保存（従来の動作）
                 if 'data' in accounts_data:
                     for account in accounts_data['data']:
+                        bid, bname = _parse_business_from_adaccount_node(account)
                         # 既存のアカウントかチェック
                         existing_account = MetaAccount.objects.filter(
                             user=user,
@@ -742,6 +900,9 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                             existing_account.access_token = long_access_token
                             existing_account.account_name = account.get('name', '')
                             existing_account.is_active = True
+                            if bid or bname:
+                                existing_account.business_id = bid
+                                existing_account.business_name = bname
                             existing_account.save()
                             saved_accounts.append(existing_account)
                         else:
@@ -750,6 +911,8 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                                 user=user,
                                 account_id=account.get('account_id'),
                                 account_name=account.get('name', ''),
+                                business_id=bid,
+                                business_name=bname,
                                 access_token=long_access_token,
                                 is_active=True
                             )
@@ -844,26 +1007,22 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                     'data_access_expires_at': token_data.get('data_access_expires_at', 0)
                 }
             
-            # Meta APIでユーザーのアカウント一覧を取得
-            url = 'https://graph.facebook.com/v18.0/me/adaccounts'
-            params = {
-                'access_token': access_token,
-                'fields': 'id,name,account_id,currency,timezone_name,account_status'
-            }
-            
-            response = requests.get(url, params=params)
-            data = response.json()
+            # Meta API: /me/adaccounts（business 要権限のトークンは同フィールドなしで再試行）
+            data = _graph_me_adaccounts_json(access_token)
             
             if 'data' in data:
                 accounts = []
                 for account in data['data']:
+                    bid, bname = _parse_business_from_adaccount_node(account)
                     accounts.append({
                         'id': account.get('id'),
                         'account_id': account.get('account_id'),
                         'name': account.get('name'),
                         'currency': account.get('currency'),
                         'timezone': account.get('timezone_name'),
-                        'status': account.get('account_status')
+                        'status': account.get('account_status'),
+                        'business_id': bid,
+                        'business_name': bname,
                     })
                 
                 logger.info(f"Fetched {len(accounts)} ad accounts for user: {request.user.email}")

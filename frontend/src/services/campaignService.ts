@@ -20,6 +20,11 @@ export interface Campaign {
   user_email: string;
   meta_account: number;
   meta_account_name: string;
+  /** Graph の act_ 等（一覧・グループ表示用） */
+  meta_account_id_str?: string;
+  /** 一覧 API で返る場合あり（レポート等のグループ用） */
+  meta_business_name?: string;
+  meta_business_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -230,8 +235,10 @@ class CampaignService {
       error?: string;
     }>;
   }> {
+    // meta_account_ids: 新 API（複数）。meta_account_id: 未更新の本番など単一 ID のみ対応の API 向け（併送しても新 API は ids を優先）
     const response = await api.post('/campaigns/campaigns/import_from_meta/', {
       meta_account_ids: metaAccountIds,
+      meta_account_id: metaAccountIds[0],
     });
     return response.data;
   }
@@ -249,6 +256,8 @@ class CampaignService {
   // レポート用データ取得
   async getReportingData(params?: {
     campaign_id?: string;
+    /** 内部キャンペーン ID をカンマ区切り（複数フィルタ） */
+    campaign_ids?: string;
     start_date?: string;
     end_date?: string;
     metrics?: string;

@@ -1,7 +1,8 @@
 from django.urls import path
-from . import views
+
+from .views import DailyAdInsightListView
 
 urlpatterns = [
-    # レポート関連のURLパターン
+    path('daily-insights/', DailyAdInsightListView.as_view(), name='daily-insights-list'),
 ]
 

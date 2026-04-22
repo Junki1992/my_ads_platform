@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, DatePicker, InputNumber, message, Alert } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, DatePicker, InputNumber, message, Alert, Checkbox, Spin, Empty, Collapse, Pagination } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PlusOutlined, EditOutlined, PauseOutlined, PlayCircleOutlined, DeleteOutlined, SyncOutlined, DownloadOutlined } from '@ant-design/icons';
 import campaignService, { Campaign, CampaignCreate } from '../services/campaignService';
 import adSetService, { AdSet } from '../services/adSetService';
 import adService, { Ad } from '../services/adService';
 import metaAccountService, { MetaAccount } from '../services/metaAccountService';
+import { groupByLinkedMetaAdAccount } from '../utils/metaAccountBusinessGroups';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
+
+/** 一覧は広告アカウント単位でまとめるため全件取得（API は 100 件/ページ上限） */
+const CAMPAIGN_LIST_FETCH_PAGE_SIZE = 100;
 
 const Campaigns: React.FC = () => {
   const { t } = useTranslation();
@@ -27,19 +31,35 @@ const Campaigns: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [selectedMetaAccountIds, setSelectedMetaAccountIds] = useState<number[]>([]);
-  
-  // ページネーション
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [total, setTotal] = useState(0);
 
-  // キャンペーン一覧を取得
-  const fetchCampaigns = async (page: number = currentPage, size: number = pageSize) => {
+  const campaignListGroups = useMemo(
+    () => groupByLinkedMetaAdAccount(campaigns, t('metaAdAccountGroupUngrouped')),
+    [campaigns, t],
+  );
+
+  const [campaignListCollapseActiveKeys, setCampaignListCollapseActiveKeys] = useState<string[]>([]);
+
+  useEffect(() => {
+    setCampaignListCollapseActiveKeys([]);
+  }, [campaigns]);
+
+  const fetchCampaigns = async () => {
     setLoading(true);
     try {
-      const data = await campaignService.getCampaigns({ page, page_size: size });
-      setCampaigns(data.results);
-      setTotal(data.count);
+      const merged: Campaign[] = [];
+      let page = 1;
+      for (;;) {
+        const data = await campaignService.getCampaigns({
+          page,
+          page_size: CAMPAIGN_LIST_FETCH_PAGE_SIZE,
+        });
+        merged.push(...data.results);
+        const total = data.count ?? merged.length;
+        if (merged.length >= total || data.results.length === 0) break;
+        page += 1;
+        if (page > 200) break;
+      }
+      setCampaigns(merged);
     } catch (error) {
       message.error('キャンペーンの取得に失敗しました');
       console.error('Failed to fetch campaigns:', error);
@@ -1105,41 +1125,70 @@ const Campaigns: React.FC = () => {
         <div style={{ marginBottom: 16, color: '#666', fontSize: '14px' }}>
           💡 {t('tapToViewDetails')}
         </div>
-        <Table
-          columns={columns}
-          dataSource={campaigns}
-          loading={loading}
-          rowKey="id"
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: total,
-            showSizeChanger: true,
-            showTotal: (total) => `全 ${total} 件`,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            onChange: (page, size) => {
-              setCurrentPage(page);
-              setPageSize(size || 20);
-              fetchCampaigns(page, size || 20);
-            },
-          }}
-          scroll={{ x: 800 }} // 横スクロール対応
-          size="small"
-          rowSelection={rowSelection}
-          onRow={(record) => ({
-            onClick: () => handleRowClick(record),
-            style: { 
-              cursor: 'pointer',
-              transition: 'background-color 0.2s',
-            },
-            onMouseEnter: (e) => {
-              e.currentTarget.style.backgroundColor = '#f5f5f5';
-            },
-            onMouseLeave: (e) => {
-              e.currentTarget.style.backgroundColor = '';
-            },
-          })}
-        />
+        {!loading && campaigns.length === 0 ? (
+          <Table
+            columns={columns}
+            dataSource={[]}
+            rowKey="id"
+            pagination={false}
+            scroll={{ x: 800 }}
+            size="small"
+            locale={{ emptyText: <Empty description={t('noData')} /> }}
+          />
+        ) : (
+          <>
+            <Spin spinning={loading}>
+              <Collapse
+                bordered
+                activeKey={campaignListCollapseActiveKeys}
+                onChange={(k: string | string[]) =>
+                  setCampaignListCollapseActiveKeys(
+                    Array.isArray(k) ? k : k != null ? [String(k)] : [],
+                  )
+                }
+                style={{ background: '#fafafa', marginBottom: 16 }}
+                items={campaignListGroups.map((g) => ({
+                  key: g.key,
+                  label: (
+                    <span>
+                      <strong>{g.title}</strong>
+                      {g.subtitle ? (
+                        <span style={{ color: '#888', marginLeft: 8, fontSize: 12 }}>{g.subtitle}</span>
+                      ) : null}
+                      <span style={{ color: '#888', marginLeft: 8, fontSize: 12 }}>
+                        ({g.accounts.length})
+                      </span>
+                    </span>
+                  ),
+                  children: (
+                    <Table
+                      columns={columns}
+                      dataSource={g.accounts}
+                      rowKey="id"
+                      pagination={false}
+                      scroll={{ x: 800 }}
+                      size="small"
+                      rowSelection={rowSelection}
+                      onRow={(record) => ({
+                        onClick: () => handleRowClick(record),
+                        style: {
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                        },
+                        onMouseEnter: (e) => {
+                          e.currentTarget.style.backgroundColor = '#f5f5f5';
+                        },
+                        onMouseLeave: (e) => {
+                          e.currentTarget.style.backgroundColor = '';
+                        },
+                      })}
+                    />
+                  ),
+                }))}
+              />
+            </Spin>
+          </>
+        )}
       </Card>
 
       <Modal
@@ -1505,22 +1554,38 @@ const Campaigns: React.FC = () => {
         cancelText="キャンセル"
         confirmLoading={loading}
       >
-        <p>Meta 広告アカウントを選択してください（複数可）。各アカウントのすべてのキャンペーンがインポートされます。</p>
-        <Select
-          mode="multiple"
-          allowClear
-          maxTagCount="responsive"
-          style={{ width: '100%' }}
-          placeholder="Meta アカウントを選択"
-          value={selectedMetaAccountIds}
-          onChange={(ids) => setSelectedMetaAccountIds(ids as number[])}
-        >
-          {metaAccounts.map(account => (
-            <Option key={account.id} value={account.id}>
-              {account.account_name} ({account.account_id})
-            </Option>
-          ))}
-        </Select>
+        <p>
+          インポートする <strong>Meta 広告アカウント</strong>にチェックを入れてください。
+          チェックした<strong>それぞれのアカウント</strong>について、Meta 上のキャンペーンを取り込みます（アカウントを複数選べます）。
+        </p>
+        <Space style={{ marginBottom: 8 }}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => setSelectedMetaAccountIds(metaAccounts.map((a) => a.id))}
+            disabled={metaAccounts.length === 0}
+          >
+            すべて選択
+          </Button>
+          <Button type="link" size="small" onClick={() => setSelectedMetaAccountIds([])}>
+            クリア
+          </Button>
+        </Space>
+        <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 8, padding: 8 }}>
+          <Checkbox.Group
+            value={selectedMetaAccountIds}
+            onChange={(list) => setSelectedMetaAccountIds(list as number[])}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              {metaAccounts.map((account) => (
+                <Checkbox key={account.id} value={account.id}>
+                  {account.account_name} ({account.account_id})
+                </Checkbox>
+              ))}
+            </Space>
+          </Checkbox.Group>
+        </div>
         {metaAccounts.length === 0 && (
           <Alert
             message="Meta アカウントが登録されていません"

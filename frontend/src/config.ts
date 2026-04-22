@@ -4,8 +4,10 @@
  */
 
 export const config = {
-  // API URL
-  apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  // API URL（末尾 /api は含めない想定。本番は同一オリジン）
+  apiUrl:
+    process.env.REACT_APP_API_URL?.replace(/\/api\/?$/, '') ||
+    (process.env.NODE_ENV === 'production' ? '' : ''),
   
   // フィーチャーフラグ
   features: {

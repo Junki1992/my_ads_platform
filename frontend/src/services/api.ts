@@ -1,6 +1,9 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+/** 本番は Nginx の /api。ローカルは package.json の proxy 経由で同じ /api（CORS・HTTPS リダイレクトを避ける） */
+export const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === 'production' ? '/api' : '/api');
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

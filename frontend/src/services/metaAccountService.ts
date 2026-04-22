@@ -4,6 +4,9 @@ export interface MetaAccount {
   id: number;
   account_id: string;
   account_name: string;
+  /** Meta ビジネス（広告アカウントの1つ上） */
+  business_id?: string;
+  business_name?: string;
   access_token: string;  // 追加
   is_active: boolean;
   created_at: string;
@@ -14,6 +17,8 @@ export interface MetaAccountCreate {
   account_id: string;
   account_name: string;
   access_token: string;
+  business_id?: string;
+  business_name?: string;
 }
 
 export interface MetaAdAccount {
@@ -24,6 +29,7 @@ export interface MetaAdAccount {
   timezone: string;
   status: number;
   business_id?: string;
+  business_name?: string;
 }
 
 class MetaAccountService {
@@ -62,6 +68,15 @@ class MetaAccountService {
     return response.data;
   }
 
+  /** 複数 Meta 広告アカウントを一括削除 */
+  async bulkDeleteMetaAccounts(ids: number[], password: string): Promise<{ message: string; deleted: number }> {
+    const response = await api.post('/accounts/meta-accounts/bulk_delete/', {
+      ids,
+      password,
+    });
+    return response.data;
+  }
+
   // トークン変換（短期→長期）
   async exchangeToken(data: {
     short_token: string;
@@ -72,9 +87,16 @@ class MetaAccountService {
     return response.data;
   }
 
-  // トークン検証（引数なし）
-  async validateToken(): Promise<{ is_valid: boolean; message?: string }> {
-    const response = await api.post('/accounts/meta-accounts/validate_token/');
+  /** 長期トークン等の検証（バックエンドは access_token 必須） */
+  async validateToken(accessToken: string): Promise<{
+    valid: boolean;
+    user_id?: string;
+    user_name?: string;
+    error?: string;
+  }> {
+    const response = await api.post('/accounts/meta-accounts/validate_token/', {
+      access_token: accessToken,
+    });
     return response.data;
   }
 

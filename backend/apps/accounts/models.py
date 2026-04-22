@@ -27,6 +27,9 @@ class MetaAccount(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='meta_accounts')
     account_id = models.CharField(max_length=50, unique=True)
     account_name = models.CharField(max_length=200)
+    # 広告アカウントの1つ上の階層（Meta ビジネス / Business Manager）
+    business_id = models.CharField(max_length=50, blank=True, default='')
+    business_name = models.CharField(max_length=200, blank=True, default='')
     access_token = models.TextField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
