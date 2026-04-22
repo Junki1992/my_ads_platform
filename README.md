@@ -233,7 +233,7 @@ npm test
 # 完全デプロイ（バックエンド + フロントエンド）
 ./deploy.sh
 
-# バックエンドのみデプロイ
+# バックエンドのみ（VM で git pull → build まで。未 push の backend だけ載せるなら DEPLOY_LOCAL_TAR=1）
 ./deploy-backend-only.sh
 
 # フロントエンドのみデプロイ（高速）
@@ -302,7 +302,7 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py createsu
 # ローカルから簡単デプロイ
 ./deploy.sh  # 全体デプロイ
 ./deploy-frontend-only.sh  # フロントエンドのみ（高速）
-./deploy-backend-only.sh  # バックエンドのみ
+./deploy-backend-only.sh  # バックエンドのみ（tar 転送 + VM で compose 完走）
 ```
 
 ### セキュリティチェックリスト
