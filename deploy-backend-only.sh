@@ -4,6 +4,8 @@
 # バックエンド本番デプロイ（VM で git pull → docker build / up / migrate / nginx）
 # 本番のソースは GitHub の main と一致させるのが最短・確実（差分転送は git が行う）。
 # ローカルだけの未 push 変更を載せたい場合のみ: DEPLOY_LOCAL_TAR=1（HEAD との差分を tar で上書き）
+# VM に手編集・未追跡があると pull が止まる。既定は強制同期: DEPLOY_SYNC_HARD=1（fetch + clean + reset）。
+# 追跡外を残したいときは DEPLOY_SYNC_HARD=0（従来の pull のみ）。
 # ==============================================================================
 
 set -e
@@ -18,6 +20,7 @@ cd "$ROOT"
 DEPLOY_HOST="${DEPLOY_HOST:-meta_ads_platform1008@ads-web-prod}"
 DEPLOY_ZONE="${DEPLOY_ZONE:-asia-northeast1-a}"
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/my_ads_platform}"
+: "${DEPLOY_SYNC_HARD:=1}"
 GCLOUD_SSH_FLAGS=(--ssh-flag=-oServerAliveInterval=30 --ssh-flag=-oServerAliveCountMax=120)
 
 should_skip_backend_path() {
@@ -106,11 +109,20 @@ elif [ -n "${FULL_BACKEND_TAR:-}" ]; then
     "${GCLOUD_SSH_FLAGS[@]}" \
     --command="set -e; mkdir -p $DEPLOY_DIR; cd $DEPLOY_DIR && tar xzf -"
 else
-  echo -e "${YELLOW}[1/7]${NC} VM: git pull origin main（GitHub の最新を取る）..."
-  gcloud compute ssh "$DEPLOY_HOST" \
-    --zone="$DEPLOY_ZONE" \
-    "${GCLOUD_SSH_FLAGS[@]}" \
-    --command="set -e; cd $DEPLOY_DIR && GIT_TERMINAL_PROMPT=0 git pull origin main && git log -1 --oneline"
+  # リポジトリが root 所有だと FETCH_HEAD が書けない。デプロイユーザーに揃えてから Git 同期。
+  if [ "$DEPLOY_SYNC_HARD" = "1" ]; then
+    echo -e "${YELLOW}[1/7]${NC} VM: 所有権調整 → origin/main 強制一致（未追跡の非 ignore ファイルは削除）..."
+    gcloud compute ssh "$DEPLOY_HOST" \
+      --zone="$DEPLOY_ZONE" \
+      "${GCLOUD_SSH_FLAGS[@]}" \
+      --command='set -e; sudo chown -R "$(id -un):$(id -gn)" '"$DEPLOY_DIR"' && cd '"$DEPLOY_DIR"' && GIT_TERMINAL_PROMPT=0 git -c safe.directory='"$DEPLOY_DIR"' fetch origin main && git clean -fd && git reset --hard origin/main && git log -1 --oneline'
+  else
+    echo -e "${YELLOW}[1/7]${NC} VM: 所有権調整 → git pull origin main（DEPLOY_SYNC_HARD=0）..."
+    gcloud compute ssh "$DEPLOY_HOST" \
+      --zone="$DEPLOY_ZONE" \
+      "${GCLOUD_SSH_FLAGS[@]}" \
+      --command='set -e; sudo chown -R "$(id -un):$(id -gn)" '"$DEPLOY_DIR"' && cd '"$DEPLOY_DIR"' && GIT_TERMINAL_PROMPT=0 git -c safe.directory='"$DEPLOY_DIR"' pull origin main && git log -1 --oneline'
+  fi
 fi
 
 if git diff --name-only HEAD -- docker-compose.prod.yml 2>/dev/null | grep -q .; then
