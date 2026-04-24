@@ -42,9 +42,7 @@ services:
       - redis
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
-      - DB_HOST=db
-      # compose 内の Postgres は SSL 非対応。.env の DB_SSLMODE=require よりこちらを優先する
-      - DB_SSLMODE=disable
+      # DB_HOST / DB_SSLMODE は .env 由来（Cloud SQL なら IP + require。コンテナ内 db のみ使うなら .env に DB_HOST=db と DB_SSLMODE=disable）
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
@@ -89,8 +87,6 @@ services:
       - redis
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
-      - DB_HOST=db
-      - DB_SSLMODE=disable
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
@@ -108,8 +104,6 @@ services:
       - redis
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
-      - DB_HOST=db
-      - DB_SSLMODE=disable
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
