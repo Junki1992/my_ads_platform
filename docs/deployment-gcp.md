@@ -90,6 +90,7 @@
 
 | 項目 | 目安 |
 |------|------|
+| エディション | **Cloud SQL Enterprise**（**Enterprise Plus**は高スペック・高 SLA 向きで、まず安く始めるなら Enterprise）。 |
 | エンジン | **PostgreSQL**（アプリに合わせる。例: 15） |
 | リージョン | **Compute Engine（VM）と同じ**（例: `asia-northeast1`） |
 | 高可用性 | **オフ**（Zonal。まず安く始める） |
