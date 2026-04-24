@@ -62,7 +62,7 @@ def _fetch_business_for_adaccount(access_token: str, account_id) -> Tuple[str, s
     try:
         r = requests.get(
             url,
-            params={'access_token': access_token, 'fields': 'business{name}'},
+            params={'access_token': access_token, 'fields': 'business{id,name}'},
             timeout=30,
         )
         data = r.json()
@@ -102,7 +102,7 @@ def _graph_me_adaccounts_json(access_token: str) -> dict:
     try:
         r1 = requests.get(
             url,
-            params={'access_token': access_token, 'fields': f'{base_fields},business{{name}}'},
+            params={'access_token': access_token, 'fields': f'{base_fields},business{{id,name}}'},
             timeout=30,
         )
         d1 = r1.json()
@@ -898,6 +898,11 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 if 'data' in accounts_data:
                     for account in accounts_data['data']:
                         bid, bname = _parse_business_from_adaccount_node(account)
+                        # /me/adaccounts では business が空のノードがあり得る → act_ 単体で補完
+                        if not bid and not bname and account.get('account_id'):
+                            bid, bname = _fetch_business_for_adaccount(
+                                long_access_token, account.get('account_id')
+                            )
                         # 既存のアカウントかチェック
                         existing_account = MetaAccount.objects.filter(
                             user=user,
@@ -1023,6 +1028,10 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                 accounts = []
                 for account in data['data']:
                     bid, bname = _parse_business_from_adaccount_node(account)
+                    if not bid and not bname and account.get('account_id'):
+                        bid, bname = _fetch_business_for_adaccount(
+                            access_token, account.get('account_id')
+                        )
                     accounts.append({
                         'id': account.get('id'),
                         'account_id': account.get('account_id'),
