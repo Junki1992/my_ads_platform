@@ -5,6 +5,51 @@ export const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   (process.env.NODE_ENV === 'production' ? '/api' : '/api');
 
+/** 本番の DRF / カスタム例外形式のどちらでも、ユーザー向け1行にまとめる */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: unknown } };
+  const data = err.response?.data;
+  if (!data || typeof data !== 'object') {
+    return fallback;
+  }
+  const d = data as Record<string, unknown>;
+  if (typeof d.error === 'string' && d.error) {
+    return d.error;
+  }
+  if (d.error && typeof d.error === 'object') {
+    const e = d.error as Record<string, unknown>;
+    if (typeof e.message === 'string' && e.message) {
+      return e.message;
+    }
+    if (e.details && typeof e.details === 'object') {
+      return flattenFieldErrors(e.details as Record<string, unknown>) || fallback;
+    }
+  }
+  if (typeof d.detail === 'string' && d.detail) {
+    return d.detail;
+  }
+  return flattenFieldErrors(d) || fallback;
+}
+
+function flattenFieldErrors(data: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (k === 'error' && v && typeof v === 'object') {
+      const nested = flattenFieldErrors(v as Record<string, unknown>);
+      if (nested) {
+        parts.push(nested);
+      }
+      continue;
+    }
+    if (Array.isArray(v) && v[0] != null) {
+      parts.push(String(v[0]));
+    } else if (typeof v === 'string') {
+      parts.push(v);
+    }
+  }
+  return parts.join(' ');
+}
+
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 300000, // タイムアウトを300秒（5分）に延長（Boxファイル検索に時間がかかる場合があるため）
@@ -39,7 +84,19 @@ api.interceptors.response.use(
                               typeof error.response.data === 'object' &&
                               'requires_reauth' in (error.response.data as any);
     
-    if (error.response?.status === 401 && !originalRequest._retry && !isBoxAccountError) {
+    // ログイン/新規登録/refresh 自身の 401 では再試行しない（誤パスワード等でリフレッシュ失敗→強制遷移を防ぐ）
+    const url = originalRequest?.url || '';
+    const isAuthAnonOrRefresh =
+      url.includes('auth/login') ||
+      url.includes('auth/register') ||
+      url.includes('token/refresh');
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isBoxAccountError &&
+      !isAuthAnonOrRefresh
+    ) {
       originalRequest._retry = true;
 
       try {

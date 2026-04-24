@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.shortcuts import redirect
 from django.conf import settings
 import logging
@@ -155,6 +155,15 @@ class AuthViewSet(viewsets.GenericViewSet):
                             'access': str(refresh.access_token),
                         }
                     }, status=status.HTTP_201_CREATED)
+            except IntegrityError:
+                logger.warning("User registration: duplicate email or username")
+                return Response(
+                    {
+                        'error': 'このメールアドレスまたはユーザー名は既に使われています',
+                        'detail': 'Email or username already taken',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception as e:
                 logger.error(f"User registration failed: {str(e)}")
                 return Response({

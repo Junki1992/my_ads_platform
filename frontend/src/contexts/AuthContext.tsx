@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import authService, { User, LoginCredentials, RegisterData } from '../services/authService';
+import { getApiErrorMessage } from '../services/api';
 import { message } from 'antd';
 
 interface AuthContextType {
@@ -60,7 +61,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(response.user);
       message.success('ログインしました');
     } catch (error: any) {
-      message.error(error.response?.data?.error || 'ログインに失敗しました');
+      message.error(getApiErrorMessage(error, 'ログインに失敗しました'));
       throw error;
     }
   };
@@ -71,8 +72,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(response.user);
       message.success('登録が完了しました');
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || '登録に失敗しました';
-      message.error(errorMsg);
+      message.error(getApiErrorMessage(error, '登録に失敗しました'));
       throw error;
     }
   };
