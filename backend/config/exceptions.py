@@ -14,12 +14,19 @@ def custom_exception_handler(exc, context):
     # DRFのデフォルト例外ハンドラーを呼び出す
     response = exception_handler(exc, context)
     
-    # ロギング
-    logger.error(
-        f"Exception: {exc.__class__.__name__}, "
-        f"Message: {str(exc)}, "
-        f"Context: {context['request'].path}"
-    )
+    if response is not None:
+        # DRFがハンドリングした例外（400/404 等）
+        logger.error(
+            f"Exception: {exc.__class__.__name__}, "
+            f"Message: {str(exc)}, "
+            f"Context: {context['request'].path}"
+        )
+    else:
+        # 未処理→500 になるためスタックトレースを出す
+        logger.error(
+            f"Unhandled exception, Context: {context['request'].path}",
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
     
     if response is not None:
         # カスタムレスポンスフォーマット
