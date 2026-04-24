@@ -112,7 +112,7 @@ def _graph_me_adaccounts_json(access_token: str) -> dict:
     if isinstance(d1, dict) and 'data' in d1:
         return d1
     if _is_business_field_permission_error(d1):
-        logger.info(
+        logger.warning(
             'me/adaccounts: business field not permitted, retrying without business field'
         )
         try:

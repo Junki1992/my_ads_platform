@@ -73,6 +73,7 @@ dmypy.json
 
 # Debug/development scripts
 debug_*.py
+!backend/apps/accounts/management/commands/debug_meta_oauth.py
 check_*.py
 cleanup_*.py
 disable_*.py
