@@ -1139,7 +1139,7 @@ const Campaigns: React.FC = () => {
             dataSource={[]}
             rowKey="id"
             pagination={false}
-            scroll={{ x: 800 }}
+            scroll={{ x: 1100 }}
             size="small"
             locale={{ emptyText: <Empty description={t('noData')} /> }}
           />
@@ -1174,7 +1174,7 @@ const Campaigns: React.FC = () => {
                       dataSource={g.accounts}
                       rowKey="id"
                       pagination={false}
-                      scroll={{ x: 800 }}
+                      scroll={{ x: 1100 }}
                       size="small"
                       rowSelection={rowSelection}
                       onRow={(record) => ({
