@@ -22,6 +22,7 @@
   "adName": "광고 이름",
   "budgetType": "예산 유형",
   "budget": "예산",
+  "campaignSpend": "지출",
   "remaining": "남은 예산",
   "schedule": "일정",
   "locations": "위치",

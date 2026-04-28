@@ -3,12 +3,28 @@ from .models import Campaign, AdSet, Ad
 from apps.accounts.models import MetaAccount
 
 
+def _cached_spend(obj: Campaign):
+    """Meta insights キャッシュから spend を取り出す（未同期は None）。"""
+    ci = obj.cached_insights
+    if not isinstance(ci, dict) or 'spend' not in ci:
+        return None
+    try:
+        return float(ci['spend'])
+    except (TypeError, ValueError):
+        return None
+
+
 class CampaignSerializer(serializers.ModelSerializer):
     """キャンペーンシリアライザー"""
     user_email = serializers.ReadOnlyField(source='user.email')
     meta_account_name = serializers.ReadOnlyField(source='meta_account.account_name')
     meta_account_id = serializers.IntegerField(write_only=True, required=False)
-    
+    spend = serializers.SerializerMethodField()
+    insights_updated_at = serializers.DateTimeField(read_only=True)
+
+    def get_spend(self, obj):
+        return _cached_spend(obj)
+
     class Meta:
         model = Campaign
         fields = [
@@ -17,9 +33,13 @@ class CampaignSerializer(serializers.ModelSerializer):
             'start_date', 'end_date', 'schedule_start_time', 'schedule_end_time',
             'schedule_days', 'timezone',
             'user', 'user_email', 'meta_account', 'meta_account_name', 'meta_account_id',
+            'spend', 'insights_updated_at',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'campaign_id', 'user', 'meta_account', 'budget_remaining', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'campaign_id', 'user', 'meta_account', 'budget_remaining',
+            'spend', 'insights_updated_at', 'created_at', 'updated_at',
+        ]
     
     def create(self, validated_data):
         """キャンペーン作成時にcampaign_idを自動生成"""
@@ -34,6 +54,11 @@ class CampaignListSerializer(serializers.ModelSerializer):
     meta_account_id_str = serializers.ReadOnlyField(source='meta_account.account_id')
     meta_business_name = serializers.ReadOnlyField(source='meta_account.business_name')
     meta_business_id = serializers.ReadOnlyField(source='meta_account.business_id')
+    spend = serializers.SerializerMethodField()
+    insights_updated_at = serializers.DateTimeField(read_only=True)
+
+    def get_spend(self, obj):
+        return _cached_spend(obj)
 
     class Meta:
         model = Campaign
@@ -42,6 +67,7 @@ class CampaignListSerializer(serializers.ModelSerializer):
             'budget', 'budget_type', 'start_date', 'end_date',
             'meta_account', 'meta_account_name', 'meta_account_id_str',
             'meta_business_name', 'meta_business_id',
+            'spend', 'insights_updated_at',
         ]
 
 

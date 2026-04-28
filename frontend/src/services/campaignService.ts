@@ -25,6 +25,9 @@ export interface Campaign {
   /** 一覧 API で返る場合あり（レポート等のグループ用） */
   meta_business_name?: string;
   meta_business_id?: string;
+  /** Meta Marketing API insights の消化金額（キャッシュ。未同期は null） */
+  spend?: number | null;
+  insights_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }

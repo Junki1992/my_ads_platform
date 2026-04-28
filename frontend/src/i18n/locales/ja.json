@@ -22,6 +22,7 @@
   "adName": "広告名",
   "budgetType": "予算タイプ",
   "budget": "予算",
+  "campaignSpend": "消化金額",
   "schedule": "スケジュール",
   "locations": "地域",
   "ageRange": "年齢範囲",

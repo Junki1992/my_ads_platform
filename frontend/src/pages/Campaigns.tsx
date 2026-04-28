@@ -967,6 +967,14 @@ const Campaigns: React.FC = () => {
       render: (value: number) => `¥${Math.floor(value).toLocaleString()}`,
     },
     {
+      title: t('campaignSpend'),
+      dataIndex: 'spend',
+      key: 'spend',
+      width: 110,
+      render: (value: number | null | undefined) =>
+        value == null || Number.isNaN(Number(value)) ? '—' : `¥${Math.floor(Number(value)).toLocaleString()}`,
+    },
+    {
       title: t('period'),
       key: 'period',
       width: 180,
@@ -1302,6 +1310,12 @@ const Campaigns: React.FC = () => {
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <strong>{t('budget')}:</strong> ¥{selectedCampaign.budget ? Math.floor(selectedCampaign.budget).toLocaleString() : '0'}
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>{t('campaignSpend')}:</strong>{' '}
+                  {selectedCampaign.spend == null || Number.isNaN(Number(selectedCampaign.spend))
+                    ? '—'
+                    : `¥${Math.floor(Number(selectedCampaign.spend)).toLocaleString()}`}
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <strong>{t('startDate')}:</strong> {dayjs(selectedCampaign.start_date).format('YYYY-MM-DD')}

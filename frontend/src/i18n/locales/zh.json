@@ -22,6 +22,7 @@
   "adName": "广告名称",
   "budgetType": "预算类型",
   "budget": "预算",
+  "campaignSpend": "花费",
   "remaining": "剩余",
   "schedule": "时间表",
   "locations": "位置",
