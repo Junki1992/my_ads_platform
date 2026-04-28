@@ -14,8 +14,9 @@ build
 htmlcov
 *.log
 
-# Virtual Environment
+# Virtual Environment（.venv は python -m venv でよく使うが未除外だと数百 MB が COPY される）
 venv/
+.venv/
 env/
 ENV/
 
