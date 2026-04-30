@@ -3,8 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
 from django.conf import settings
+from django.core.cache import cache
 from celery.result import AsyncResult
 import logging
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
@@ -17,6 +19,10 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _sync_progress_cache_key(sync_run_id: str) -> str:
+    return f"campaigns:sync_all:progress:{sync_run_id}"
 
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -580,6 +586,18 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     break
 
             insights_queued = 0
+            sync_run_id = str(uuid.uuid4())
+            cache.set(
+                _sync_progress_cache_key(sync_run_id),
+                {
+                    'sync_run_id': sync_run_id,
+                    'total': 0,
+                    'completed': 0,
+                    'failed': 0,
+                    'status': 'running',
+                },
+                timeout=60 * 60,
+            )
             for c in user_qs:
                 if not c.campaign_id or str(c.campaign_id).startswith('camp_'):
                     continue
@@ -589,8 +607,20 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     continue
                 if insights_queued >= max_insights_queue_per_run:
                     break
-                fetch_campaign_insights_from_meta.delay(c.id)
+                fetch_campaign_insights_from_meta.delay(c.id, sync_run_id=sync_run_id)
                 insights_queued += 1
+
+            cache.set(
+                _sync_progress_cache_key(sync_run_id),
+                {
+                    'sync_run_id': sync_run_id,
+                    'total': insights_queued,
+                    'completed': 0,
+                    'failed': 0,
+                    'status': 'done' if insights_queued == 0 else 'running',
+                },
+                timeout=60 * 60,
+            )
 
             logger.info(
                 "All campaigns sync queued directly: "
@@ -599,6 +629,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'status': 'started',
+                'sync_run_id': sync_run_id,
                 'insights_tasks_queued_estimate': insights_queued,
                 'status_tasks_queued': status_tasks_queued,
                 'message': (
@@ -612,6 +643,31 @@ class CampaignViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Meta API同期の開始に失敗しました: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def sync_all_progress(self, request):
+        """sync_all_from_meta の実数進捗（completed / total）を返す"""
+        sync_run_id = request.query_params.get('sync_run_id')
+        if not sync_run_id:
+            return Response(
+                {'error': 'sync_run_id が必要です'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = cache.get(_sync_progress_cache_key(sync_run_id))
+        if not data:
+            return Response(
+                {
+                    'sync_run_id': sync_run_id,
+                    'status': 'not_found',
+                    'total': 0,
+                    'completed': 0,
+                    'failed': 0,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
     def sync_all_status(self, request):

@@ -80,6 +80,7 @@ const Campaigns: React.FC = () => {
   const [syncProgressStartedAt, setSyncProgressStartedAt] = useState<string | null>(null);
   const [syncProgressUnknownTotal, setSyncProgressUnknownTotal] = useState(false);
   const [syncAllTaskId, setSyncAllTaskId] = useState<string | null>(null);
+  const [syncRunId, setSyncRunId] = useState<string | null>(null);
   const [syncAllTaskState, setSyncAllTaskState] = useState<'idle' | 'pending' | 'success' | 'failure'>('idle');
   const [syncAllTaskMessage, setSyncAllTaskMessage] = useState<string>('');
   const [syncProgressLastUpdatedAt, setSyncProgressLastUpdatedAt] = useState<number | null>(null);
@@ -134,6 +135,7 @@ const Campaigns: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (syncRunId) return;
     if (!syncProgressVisible || syncProgressTotal <= 0 || !syncProgressStartedAt) return;
 
     const startedAtMs = Date.parse(syncProgressStartedAt);
@@ -158,9 +160,10 @@ const Campaigns: React.FC = () => {
     }, SYNC_PROGRESS_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, [campaigns, syncProgressDone, syncProgressVisible, syncProgressStartedAt, syncProgressTotal]);
+  }, [campaigns, syncProgressDone, syncProgressVisible, syncProgressStartedAt, syncProgressTotal, syncRunId]);
 
   useEffect(() => {
+    if (syncRunId) return;
     if (!syncProgressVisible || syncAllTaskState !== 'pending') return;
 
     const timer = window.setInterval(() => {
@@ -172,7 +175,41 @@ const Campaigns: React.FC = () => {
     }, SYNC_PROGRESS_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, [syncAllTaskState, syncProgressLastUpdatedAt, syncProgressStartedAt, syncProgressVisible]);
+  }, [syncAllTaskState, syncProgressLastUpdatedAt, syncProgressStartedAt, syncProgressVisible, syncRunId]);
+
+  useEffect(() => {
+    if (!syncRunId) return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const progress = await campaignService.getSyncAllProgress(syncRunId);
+        if (cancelled) return;
+        setSyncProgressVisible(true);
+        setSyncProgressUnknownTotal(false);
+        setSyncProgressTotal(Number(progress.total || 0));
+        setSyncProgressDone(Number(progress.completed || 0));
+        setSyncAllTaskState(progress.status === 'done' ? 'success' : 'pending');
+        setSyncAllTaskMessage(
+          progress.status === 'done'
+            ? `同期完了: ${progress.completed}/${progress.total} 件（失敗 ${progress.failed}）`
+            : `同期実行中: ${progress.completed}/${progress.total} 件（失敗 ${progress.failed}）`,
+        );
+        if (progress.status === 'done') {
+          setSyncRunId(null);
+          setSyncProgressStuck(false);
+          void fetchCampaigns();
+        }
+      } catch {
+        if (cancelled) return;
+        setSyncAllTaskState('failure');
+        setSyncAllTaskMessage('実数進捗の取得に失敗しました');
+      }
+    }, SYNC_PROGRESS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [syncRunId]);
 
   useEffect(() => {
     if (!syncAllTaskId) return;
@@ -917,11 +954,13 @@ const Campaigns: React.FC = () => {
     setSyncProgressLastUpdatedAt(Date.now());
     setSyncProgressStuck(false);
     setSyncAllTaskId(null);
+    setSyncRunId(null);
     setSyncAllTaskState('pending');
     setSyncAllTaskMessage('同期リクエストを送信中です');
     try {
       const result = await campaignService.syncAllCampaignsFromMeta();
       const est = result.insights_tasks_queued_estimate;
+      if (result.sync_run_id) setSyncRunId(result.sync_run_id);
       if (result.task_id) {
         setSyncAllTaskId(result.task_id);
         setSyncAllTaskState('pending');

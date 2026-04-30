@@ -216,10 +216,25 @@ class CampaignService {
   async syncAllCampaignsFromMeta(): Promise<{
     status: string;
     task_id?: string;
+    sync_run_id?: string;
     message: string;
     insights_tasks_queued_estimate?: number;
+    status_tasks_queued?: number;
   }> {
     const response = await api.post('/campaigns/campaigns/sync_all_from_meta/');
+    return response.data;
+  }
+
+  async getSyncAllProgress(syncRunId: string): Promise<{
+    sync_run_id: string;
+    status: 'running' | 'done' | 'not_found' | string;
+    total: number;
+    completed: number;
+    failed: number;
+  }> {
+    const response = await api.get('/campaigns/campaigns/sync_all_progress/', {
+      params: { sync_run_id: syncRunId },
+    });
     return response.data;
   }
 

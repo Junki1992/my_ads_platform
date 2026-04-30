@@ -1,5 +1,6 @@
 from celery import shared_task
 from django.conf import settings
+from django.core.cache import cache
 import requests
 import logging
 import base64
@@ -7,6 +8,29 @@ import os
 from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
+
+
+def _sync_progress_cache_key(sync_run_id: str) -> str:
+    return f"campaigns:sync_all:progress:{sync_run_id}"
+
+
+def _mark_sync_progress(sync_run_id: str | None, status: str) -> None:
+    if not sync_run_id:
+        return
+    key = _sync_progress_cache_key(sync_run_id)
+    data = cache.get(key)
+    if not isinstance(data, dict):
+        return
+    total = int(data.get('total') or 0)
+    completed = int(data.get('completed') or 0) + 1
+    failed = int(data.get('failed') or 0) + (1 if status == 'error' else 0)
+    new_data = {
+        **data,
+        'completed': completed,
+        'failed': failed,
+        'status': 'done' if total == 0 or completed >= total else 'running',
+    }
+    cache.set(key, new_data, timeout=60 * 60)
 
 
 def _meta_campaign_insights_time_range_json():
@@ -995,11 +1019,15 @@ def pause_campaign_in_meta(self, campaign_id):
 
 
 @shared_task(bind=True)
-def fetch_campaign_insights_from_meta(self, campaign_id):
+def fetch_campaign_insights_from_meta(self, campaign_id, sync_run_id=None):
     """Meta APIからキャンペーンのインサイトデータを取得するタスク"""
     from .models import Campaign
     from apps.accounts.models import MetaAccount
     
+    def _finish(payload):
+        _mark_sync_progress(sync_run_id, str(payload.get('status', 'error')))
+        return payload
+
     try:
         logger.info(f"=== FETCH CAMPAIGN INSIGHTS TASK STARTED ===")
         logger.info(f"Campaign ID: {campaign_id}")
@@ -1118,11 +1146,11 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
                         logger.info(f"Cached insights for campaign {campaign.id}")
                         
-                        return {
+                        return _finish({
                             'status': 'success',
                             'campaign_id': campaign.campaign_id,
                             'insights': insights_dict
-                        }
+                        })
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
                         # data=[] でも「取得試行済み」として時刻を更新し、UI進捗に反映させる
@@ -1141,15 +1169,15 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         campaign.cached_insights = zero_insights
                         campaign.insights_updated_at = timezone.now()
                         campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
-                        return {
+                        return _finish({
                             'status': 'warning',
                             'campaign_id': campaign.campaign_id,
                             'message': 'No insights data available',
                             'insights': zero_insights
-                        }
+                        })
                 else:
                     logger.error(f"Meta API insights failed with status {response.status_code}: {response.text}")
-                    return {
+                    return _finish({
                         'status': 'error',
                         'campaign_id': campaign.campaign_id,
                         'message': f'Meta API insights failed with status {response.status_code}: {response.text}',
@@ -1163,11 +1191,11 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                             'reach': 0,
                             'frequency': 0,
                         }
-                    }
+                    })
                     
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 logger.warning(f"Meta API connection failed during insights fetch: {e}")
-                return {
+                return _finish({
                     'status': 'warning',
                     'campaign_id': campaign.campaign_id,
                     'message': f'Meta API connection failed during insights fetch: {str(e)}',
@@ -1181,10 +1209,10 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         'reach': 0,
                         'frequency': 0,
                     }
-                }
+                })
             except Exception as e:
                 logger.error(f"Unexpected error during Meta API insights fetch: {str(e)}")
-                return {
+                return _finish({
                     'status': 'error',
                     'campaign_id': campaign.campaign_id,
                     'message': f'Unexpected error during Meta API insights fetch: {str(e)}',
@@ -1198,10 +1226,10 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         'reach': 0,
                         'frequency': 0,
                     }
-                }
+                })
         else:
             logger.info(f"Campaign has no valid Facebook ID or is demo campaign: {campaign.campaign_id}")
-            return {
+            return _finish({
                 'status': 'info',
                 'campaign_id': campaign.campaign_id,
                 'message': 'Campaign has no valid Facebook ID or is demo campaign - no Meta insights available',
@@ -1215,20 +1243,20 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                     'reach': 0,
                     'frequency': 0,
                 }
-            }
+            })
     
     except Campaign.DoesNotExist:
         logger.error(f"Campaign with ID {campaign_id} not found")
-        return {
+        return _finish({
             'status': 'error',
             'message': f'Campaign with ID {campaign_id} not found'
-        }
+        })
     except Exception as e:
         logger.error(f"Meta API insights fetch failed: {str(e)}")
-        return {
+        return _finish({
             'status': 'error',
             'message': f'Meta API insights fetch failed: {str(e)}'
-        }
+        })
 
 
 @shared_task(bind=True)
