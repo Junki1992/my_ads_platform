@@ -111,10 +111,12 @@ docker-compose -f docker-compose.prod.yml logs -f backend
 
 ## 更新デプロイ（2回目以降）
 
+**Compose の書き方**: Docker 公式は **V2** で `docker compose`（スペース区切り）です。古い `docker-compose` 単体コマンドが無い VM が多いです。次の手順では **`docker compose`** で統一しています（`deploy.sh` はどちらも自動検出します）。
+
 ### 方法1: 自動デプロイスクリプト（推奨）
 
 ```bash
-cd ~/my_ads_platform
+cd ~/my_ads_platform   # または /opt/my_ads_platform（リポジトリのルート。frontend 直下ではない）
 chmod +x deploy.sh
 ./deploy.sh
 ```
@@ -127,21 +129,21 @@ cd ~/my_ads_platform
 # 1. 最新コードを取得
 git pull origin main
 
-# 2. コンテナを停止
-docker-compose -f docker-compose.prod.yml down
+# 2. コンテナを停止（V2: docker compose / V1: docker-compose）
+docker compose -f docker-compose.prod.yml down
 
 # 3. イメージを再構築して起動
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 
 # 4. マイグレーション実行
-docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
+docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
 
 # 5. 静的ファイル収集
-docker-compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
+docker compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
 
 # 6. 動作確認
-docker-compose -f docker-compose.prod.yml ps
-docker-compose -f docker-compose.prod.yml logs -f
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f
 ```
 
 ---
