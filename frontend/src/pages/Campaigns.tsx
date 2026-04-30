@@ -20,6 +20,7 @@ import {
   Pagination,
   Switch,
   Typography,
+  Progress,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PlusOutlined, EditOutlined, PauseOutlined, PlayCircleOutlined, DeleteOutlined, SyncOutlined, DownloadOutlined } from '@ant-design/icons';
@@ -53,6 +54,7 @@ function campaignHasSpendAmount(c: Campaign): boolean {
 
 /** 一覧は広告アカウント単位でまとめるため全件取得（API は 100 件/ページ上限） */
 const CAMPAIGN_LIST_FETCH_PAGE_SIZE = 100;
+const SYNC_PROGRESS_POLL_INTERVAL_MS = 5000;
 
 const Campaigns: React.FC = () => {
   const { t } = useTranslation();
@@ -71,6 +73,11 @@ const Campaigns: React.FC = () => {
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [selectedMetaAccountIds, setSelectedMetaAccountIds] = useState<number[]>([]);
   const [syncAllLoading, setSyncAllLoading] = useState(false);
+  const [syncProgressVisible, setSyncProgressVisible] = useState(false);
+  const [syncProgressTotal, setSyncProgressTotal] = useState(0);
+  const [syncProgressDone, setSyncProgressDone] = useState(0);
+  const [syncProgressStartedAt, setSyncProgressStartedAt] = useState<string | null>(null);
+  const [syncProgressUnknownTotal, setSyncProgressUnknownTotal] = useState(false);
   /** 消化が未計測（—）または 0 円の行を一覧から除外 */
   const [hideCampaignsWithoutSpend, setHideCampaignsWithoutSpend] = useState(true);
 
@@ -119,6 +126,29 @@ const Campaigns: React.FC = () => {
     fetchCampaigns();
     fetchMetaAccounts();
   }, []);
+
+  useEffect(() => {
+    if (!syncProgressVisible || syncProgressTotal <= 0 || !syncProgressStartedAt) return;
+
+    const startedAtMs = Date.parse(syncProgressStartedAt);
+    const timer = window.setInterval(() => {
+      const done = campaigns.filter((campaign) => {
+        if (!campaign.campaign_id || String(campaign.campaign_id).startsWith('camp_')) return false;
+        if (!campaign.insights_updated_at) return false;
+        const updatedAtMs = Date.parse(campaign.insights_updated_at);
+        return Number.isFinite(updatedAtMs) && updatedAtMs >= startedAtMs;
+      }).length;
+
+      setSyncProgressDone(done);
+
+      if (done >= syncProgressTotal) {
+        setSyncProgressVisible(false);
+        message.success(`同期の進捗: ${done}/${syncProgressTotal} 件完了`);
+      }
+    }, SYNC_PROGRESS_POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [campaigns, syncProgressVisible, syncProgressStartedAt, syncProgressTotal]);
 
   // Meta アカウント一覧を取得
   const fetchMetaAccounts = async () => {
@@ -800,22 +830,46 @@ const Campaigns: React.FC = () => {
   // すべてのキャンペーンのMeta API同期（バックエンド: ステータス一括 + インサイト取得タスクをキュー）
   const handleSyncAllCampaigns = async () => {
     setSyncAllLoading(true);
+    // 押下直後に「同期中」を必ず可視化（API応答待ち中でも表示）
+    setSyncProgressVisible(true);
+    setSyncProgressUnknownTotal(true);
+    setSyncProgressTotal(0);
+    setSyncProgressDone(0);
+    setSyncProgressStartedAt(null);
     try {
       const result = await campaignService.syncAllCampaignsFromMeta();
       const est = result.insights_tasks_queued_estimate;
       if (result.task_id) {
+        if (est != null && est > 0) {
+          setSyncProgressVisible(true);
+          setSyncProgressTotal(est);
+          setSyncProgressDone(0);
+          setSyncProgressStartedAt(new Date().toISOString());
+          setSyncProgressUnknownTotal(false);
+        } else {
+          // バックエンドが件数見積もりを返さない場合でも「同期中」であることを表示
+          setSyncProgressVisible(true);
+          setSyncProgressTotal(0);
+          setSyncProgressDone(0);
+          setSyncProgressStartedAt(null);
+          setSyncProgressUnknownTotal(true);
+        }
         message.success(
           est != null
             ? t('campaignsSyncAllQueuedWithInsights', { count: est })
             : t('campaignsSyncAllQueued'),
         );
         fetchCampaigns();
+        window.setTimeout(() => void fetchCampaigns(), 5000);
         window.setTimeout(() => void fetchCampaigns(), 10000);
+        window.setTimeout(() => void fetchCampaigns(), 15000);
       } else {
         message.success(result.message || t('campaignsSyncAllDone'));
         fetchCampaigns();
       }
     } catch (error) {
+      setSyncProgressVisible(false);
+      setSyncProgressUnknownTotal(false);
       message.error(t('campaignsSyncAllFailed'));
       console.error('Failed to sync all campaigns:', error);
     } finally {
@@ -1195,6 +1249,35 @@ const Campaigns: React.FC = () => {
             </Text>
           </div>
         </div>
+        {syncProgressVisible && (
+          <Card size="small" style={{ marginBottom: 12, background: '#fafafa' }}>
+            {syncProgressUnknownTotal ? (
+              <>
+                <div style={{ marginBottom: 8, fontSize: 13 }}>同期実行中…（件数算出中）</div>
+                <Progress percent={99} status="active" showInfo={false} />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  同期ジョブは起動済みです。しばらく待ってから一覧を更新してください。
+                </Text>
+              </>
+            ) : (
+              <>
+                <div style={{ marginBottom: 8, fontSize: 13 }}>
+                  同期進捗: {Math.min(syncProgressDone, syncProgressTotal)}/{syncProgressTotal} 件
+                </div>
+                <Progress
+                  percent={Math.min(
+                    100,
+                    Math.round((Math.min(syncProgressDone, syncProgressTotal) / syncProgressTotal) * 100),
+                  )}
+                  status={syncProgressDone >= syncProgressTotal ? 'success' : 'active'}
+                />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  5秒ごとに自動更新しています（インサイト更新ベースの推定進捗）
+                </Text>
+              </>
+            )}
+          </Card>
+        )}
         {!loading && campaigns.length === 0 ? (
           <Table
             columns={columns}
