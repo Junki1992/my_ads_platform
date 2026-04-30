@@ -129,19 +129,24 @@ cd ~/my_ads_platform
 # 1. 最新コードを取得
 git pull origin main
 
-# 2. コンテナを停止（V2: docker compose / V1: docker-compose）
+# 2. 【重要】フロントをビルド（省略すると UI が古いまま）
+# docker-compose.prod.yml はホストの ./frontend/build を nginx にマウントしているだけで、
+# docker compose build は React をビルドしません。
+cd frontend && npm ci && npm run build && cd ..
+
+# 3. コンテナを停止（V2: docker compose）
 docker compose -f docker-compose.prod.yml down
 
-# 3. イメージを再構築して起動
+# 4. イメージを再構築して起動
 docker compose -f docker-compose.prod.yml up -d --build
 
-# 4. マイグレーション実行
-docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
+# 5. マイグレーション実行
+docker compose -f docker-compose.prod.yml exec -T backend python manage.py migrate
 
-# 5. 静的ファイル収集
-docker compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
+# 6. 静的ファイル収集（Django 管理画面用など）
+docker compose -f docker-compose.prod.yml exec -T backend python manage.py collectstatic --noinput
 
-# 6. 動作確認
+# 7. 動作確認
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f
 ```
@@ -150,30 +155,35 @@ docker compose -f docker-compose.prod.yml logs -f
 
 ## トラブルシューティング
 
+### 本番で React の変更（ボタン・文言など）が反映されない
+
+**原因**: 上記のとおり **必ず `frontend` で `npm run build`** して `frontend/build` を更新してください。ブラウザのキャッシュも疑う場合はスーパーリロード（キャッシュ無効の再読み込み）を試してください。
+
+VM に Node.js が無い場合は、ローカルや CI で `npm run build` した `build` フォルダをサーバーの `frontend/build` に同期する運用にしてください。
+
 ### コンテナが起動しない
 
 ```bash
 # ログを確認
-docker-compose -f docker-compose.prod.yml logs backend
-docker-compose -f docker-compose.prod.yml logs frontend
-docker-compose -f docker-compose.prod.yml logs nginx
+docker compose -f docker-compose.prod.yml logs backend
+docker compose -f docker-compose.prod.yml logs nginx
 
 # コンテナの状態確認
 docker ps -a
 
 # すべてクリーンアップして再起動
-docker-compose -f docker-compose.prod.yml down -v
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml down -v
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ### データベース接続エラー
 
 ```bash
 # データベースコンテナのログ確認
-docker-compose -f docker-compose.prod.yml logs db
+docker compose -f docker-compose.prod.yml logs db
 
 # データベースに直接接続して確認
-docker-compose -f docker-compose.prod.yml exec db psql -U postgres -d my_ads_platform
+docker compose -f docker-compose.prod.yml exec db psql -U postgres -d my_ads_platform
 ```
 
 ### ポートが使用中

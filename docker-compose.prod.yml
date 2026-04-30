@@ -69,7 +69,8 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - static_volume:/app/static:ro
       - media_volume:/app/media:ro
-      - ./frontend/build:/usr/share/nginx/html:ro  # ローカルビルド済みを直接マウント
+      # frontend で npm run build した成果物。compose の build はバックエンド用のみで React は更新されない
+      - ./frontend/build:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL証明書
     depends_on:
       - backend
