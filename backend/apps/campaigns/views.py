@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
 from django.conf import settings
+from celery.result import AsyncResult
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
@@ -577,6 +578,45 @@ class CampaignViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Meta API同期の開始に失敗しました: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def sync_all_status(self, request):
+        """sync_all_from_meta の Celery タスク状態を返す"""
+        task_id = request.query_params.get('task_id')
+        if not task_id:
+            return Response(
+                {'error': 'task_id が必要です'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = AsyncResult(task_id)
+            payload = {
+                'task_id': task_id,
+                'state': result.state,
+            }
+
+            if result.state == 'SUCCESS':
+                task_result = result.result
+                if isinstance(task_result, dict):
+                    payload['result'] = task_result
+                    payload['message'] = task_result.get('message', '同期が完了しました')
+                else:
+                    payload['result'] = {'raw': str(task_result)}
+                    payload['message'] = '同期が完了しました'
+            elif result.state == 'FAILURE':
+                payload['error'] = str(result.result)
+                payload['message'] = '同期に失敗しました'
+            else:
+                payload['message'] = '同期実行中です'
+
+            return Response(payload, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Failed to get sync all status: {str(e)}")
+            return Response(
+                {'error': f'同期ステータスの取得に失敗しました: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def _import_campaigns_for_meta_account(self, user, meta_account):
         """

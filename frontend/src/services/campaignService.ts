@@ -223,6 +223,25 @@ class CampaignService {
     return response.data;
   }
 
+  async getSyncAllCampaignsStatus(taskId: string): Promise<{
+    task_id: string;
+    state: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | string;
+    message?: string;
+    error?: string;
+    result?: {
+      status?: string;
+      total_campaigns?: number;
+      successful_syncs?: number;
+      insights_tasks_queued?: number;
+      message?: string;
+    };
+  }> {
+    const response = await api.get('/campaigns/campaigns/sync_all_status/', {
+      params: { task_id: taskId },
+    });
+    return response.data;
+  }
+
   // Meta API からキャンペーンをインポート（複数アカウント可）
   async importCampaignsFromMeta(metaAccountIds: number[]): Promise<{
     status: string;
