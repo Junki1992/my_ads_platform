@@ -8,6 +8,18 @@ from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
 
+
+def _meta_campaign_insights_time_range_json():
+    """Meta campaign insights 用 time_range（実行日から最大約1年・当日まで）"""
+    from datetime import timedelta
+    import json
+    from django.utils import timezone
+
+    end_d = timezone.now().date()
+    start_d = end_d - timedelta(days=364)
+    return json.dumps({'since': start_d.strftime('%Y-%m-%d'), 'until': end_d.strftime('%Y-%m-%d')})
+
+
 def upload_image_to_meta(ad, access_token):
     """
     Meta APIに画像をアップロードしてハッシュIDを取得する関数
@@ -1021,7 +1033,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                 insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
                 params = {
                     'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
-                    'time_range': '{"since":"2024-01-01","until":"2024-12-31"}',
+                    'time_range': _meta_campaign_insights_time_range_json(),
                     'level': 'campaign'
                 }
                 
@@ -1371,16 +1383,17 @@ def sync_campaign_status_from_meta(self, campaign_id):
 
 
 @shared_task(bind=True)
-def sync_all_campaigns_status_from_meta(self):
-    """すべてのキャンペーンのステータスをMeta APIから同期するタスク"""
+def sync_all_campaigns_status_from_meta(self, user_id: int):
+    """ログインユーザーのキャンペーンのステータスを Meta と同期し、インサイト取得タスクをキューする"""
     from .models import Campaign
     
     try:
-        logger.info(f"=== SYNC ALL CAMPAIGNS STATUS TASK STARTED ===")
+        logger.info(f"=== SYNC ALL CAMPAIGNS STATUS TASK STARTED (user_id={user_id}) ===")
         
-        # アクティブなキャンペーンを取得（削除されていないもの）
-        campaigns = Campaign.objects.exclude(status='DELETED')
-        logger.info(f"Found {campaigns.count()} campaigns to sync")
+        campaigns = Campaign.objects.filter(user_id=user_id).exclude(
+            status__in=['DELETED', 'ARCHIVED']
+        )
+        logger.info(f"Found {campaigns.count()} campaigns to sync for user {user_id}")
         
         results = []
         for campaign in campaigns:
@@ -1404,15 +1417,29 @@ def sync_all_campaigns_status_from_meta(self):
         
         successful_syncs = len([r for r in results if r['result'].get('status') == 'success'])
         total_syncs = len(results)
+
+        insights_queued = 0
+        for campaign in campaigns:
+            cid = getattr(campaign, 'campaign_id', None) or ''
+            if cid and not str(cid).startswith('camp_'):
+                fetch_campaign_insights_from_meta.delay(campaign.id)
+                insights_queued += 1
         
-        logger.info(f"Sync completed: {successful_syncs}/{total_syncs} campaigns synchronized successfully")
+        logger.info(
+            f"Sync completed: {successful_syncs}/{total_syncs} campaigns status OK; "
+            f"insights tasks queued: {insights_queued}"
+        )
         
         return {
             'status': 'success',
             'total_campaigns': total_syncs,
             'successful_syncs': successful_syncs,
+            'insights_tasks_queued': insights_queued,
             'results': results,
-            'message': f'Synchronized {successful_syncs}/{total_syncs} campaigns from Meta API'
+            'message': (
+                f'Status sync {successful_syncs}/{total_syncs}; '
+                f'queued {insights_queued} insight fetch(es) for spend/impressions'
+            ),
         }
         
     except Exception as e:
@@ -2157,7 +2184,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                 insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
                 params = {
                     'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
-                    'time_range': '{"since":"2024-01-01","until":"2024-12-31"}',
+                    'time_range': _meta_campaign_insights_time_range_json(),
                     'level': 'campaign'
                 }
                 
@@ -2654,7 +2681,7 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                 insights_url = f"{api_base_url}/{campaign.campaign_id}/insights"
                 params = {
                     'fields': 'spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions,conversions',
-                    'time_range': '{"since":"2024-01-01","until":"2024-12-31"}',
+                    'time_range': _meta_campaign_insights_time_range_json(),
                     'level': 'campaign'
                 }
                 

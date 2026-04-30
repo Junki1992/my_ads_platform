@@ -10,7 +10,7 @@ def root(request):
     return JsonResponse(
         {
             'service': 'my-ads-platform-api',
-            'hint': 'Web UI はフロントを起動して http://127.0.0.1:3000 を開いてください。',
+            'hint': 'Web UI はフロントを起動して http://127.0.0.1:3002 を開いてください。',
         }
     )
 

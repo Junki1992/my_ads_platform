@@ -128,6 +128,63 @@ def _graph_me_adaccounts_json(access_token: str) -> dict:
     return d1
 
 
+def _fetch_debug_token_info(access_token: str) -> dict:
+    """
+    Graph API debug_token。input_token を検査するとき、access_token には
+    原則 as app_id|app_secret（アプリアクセストークン）を使う。
+    入出力ともユーザ／システムトークンにすると、システムユーザートークン誤判定になりやすい。
+
+    参照: get_app_access_token / Meta Marketing API
+    """
+    debug_url = f'https://graph.facebook.com/{GRAPH_VERSION}/debug_token'
+    app_id = (getattr(settings, 'META_APP_ID', None) or '').strip()
+    app_secret = (getattr(settings, 'META_APP_SECRET', None) or '').strip()
+    params: dict = {'input_token': access_token}
+    if app_id and app_secret:
+        params['access_token'] = f'{app_id}|{app_secret}'
+    else:
+        # アプリ未設定時のみ自己照会（本番は .env を推奨）
+        params['access_token'] = access_token
+    try:
+        r = requests.get(debug_url, params=params, timeout=30)
+    except OSError as e:
+        return {'is_valid': False, 'debug_error': str(e)}
+    try:
+        j = r.json()
+    except ValueError:
+        return {
+            'is_valid': False,
+            'debug_error': f'Invalid debug_token response (status {r.status_code})',
+        }
+    if r.status_code != 200 or 'data' not in j or not isinstance(j.get('data'), dict):
+        err = ''
+        if isinstance(j, dict) and 'error' in j:
+            err = (j.get('error') or {}).get('message', '') or str(j)
+        return {'is_valid': False, 'debug_error': err or str(j)}
+    td = j['data']
+    scopes = list(td.get('scopes') or [])
+    if not scopes and isinstance(td.get('granular_scopes'), list):
+        for item in td['granular_scopes']:
+            if isinstance(item, dict) and item.get('scope'):
+                scopes.append(item['scope'])
+    out = {
+        'expires_at': td.get('expires_at', 0) or 0,
+        'is_valid': bool(td.get('is_valid', False)),
+        'issued_at': td.get('issued_at', 0) or 0,
+        'data_access_expires_at': td.get('data_access_expires_at', 0) or 0,
+        'app_id': str(td.get('app_id', '')) if td.get('app_id') is not None else None,
+        'type': str(td.get('type', '')) if td.get('type') is not None else None,
+        'scopes': [s for s in scopes if s],
+    }
+    if app_id and out.get('app_id') and out['app_id'] != app_id:
+        out['app_id_mismatch'] = True
+    else:
+        out['app_id_mismatch'] = False
+    need = ('ads_read', 'ads_management')
+    out['missing_ads_scopes'] = [s for s in need if s not in out['scopes']]
+    return out
+
+
 class AuthViewSet(viewsets.GenericViewSet):
     """認証関連のViewSet"""
     permission_classes = [permissions.AllowAny]
@@ -765,7 +822,7 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
         import jwt
         
         # フロントエンドURLを取得
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3002')
         
         code = request.GET.get('code')
         state = request.GET.get('state')
@@ -1002,28 +1059,11 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # トークンのデバッグ情報（有効期限含む）を取得
-            debug_url = 'https://graph.facebook.com/v18.0/debug_token'
-            debug_params = {
-                'input_token': access_token,
-                'access_token': access_token
-            }
-            debug_response = requests.get(debug_url, params=debug_params)
-            debug_data = debug_response.json()
-            
-            token_info = {}
-            if 'data' in debug_data:
-                token_data = debug_data['data']
-                token_info = {
-                    'expires_at': token_data.get('expires_at', 0),
-                    'is_valid': token_data.get('is_valid', False),
-                    'issued_at': token_data.get('issued_at', 0),
-                    'data_access_expires_at': token_data.get('data_access_expires_at', 0)
-                }
-            
+            token_info = _fetch_debug_token_info(access_token)
+
             # Meta API: /me/adaccounts（business 要権限のトークンは同フィールドなしで再試行）
             data = _graph_me_adaccounts_json(access_token)
-            
+
             if 'data' in data:
                 accounts = []
                 for account in data['data']:
@@ -1042,23 +1082,24 @@ class MetaAccountViewSet(viewsets.ModelViewSet):
                         'business_id': bid,
                         'business_name': bname,
                     })
-                
+
                 logger.info(f"Fetched {len(accounts)} ad accounts for user: {request.user.email}")
                 return Response({
                     'accounts': accounts,
-                    'token_info': token_info
+                    'token_info': token_info,
                 }, status=status.HTTP_200_OK)
             else:
                 error_message = data.get('error', {}).get('message', 'Failed to fetch accounts')
                 logger.error(f"Fetch accounts failed: {error_message}")
                 return Response({
-                    'error': error_message
+                    'error': error_message,
+                    'token_info': token_info,
                 }, status=status.HTTP_400_BAD_REQUEST)
-                
+
         except Exception as e:
             logger.error(f"Fetch accounts error: {str(e)}")
             return Response({
-                'error': f'Failed to fetch accounts: {str(e)}'
+                'error': f'Failed to fetch accounts: {str(e)}',
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1138,7 +1179,7 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
         
         # Box App設定を取得
         client_id = getattr(settings, 'BOX_CLIENT_ID', None)
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3002')
         
         if not client_id:
             logger.error("BOX_CLIENT_ID is not configured in settings")
@@ -1182,7 +1223,7 @@ class BoxAccountViewSet(viewsets.ModelViewSet):
         
         code = request.query_params.get('code')
         state = request.query_params.get('state')
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3002')
         
         if not code or not state:
             logger.error("Box OAuth callback missing code or state")

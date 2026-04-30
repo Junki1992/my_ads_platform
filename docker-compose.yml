@@ -15,8 +15,10 @@ services:
     ports:
       - "6379:6379"
 
+  # backend と celery は同一イメージを共有（片方だけ再ビルドでズレて ModuleNotFound になるのを防ぐ）
   backend:
     build: ./backend
+    image: my_ads_platform-backend:latest
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./backend:/app
@@ -39,12 +41,16 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      # フロントコンテナ内では 127.0.0.1:8000 はバックエンドではない（src/setupProxy.js）
+      - BACKEND_PROXY=http://backend:8000
     depends_on:
       - backend
 
   celery:
-    build: ./backend
+    image: my_ads_platform-backend:latest
     command: celery -A config worker --loglevel=info
     volumes:
       - ./backend:/app

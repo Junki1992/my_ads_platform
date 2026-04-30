@@ -16,6 +16,7 @@ import {
   Space,
   Collapse,
   Pagination,
+  Switch,
 } from 'antd';
 import { AxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +33,17 @@ const { Text } = Typography;
 function truncateChartLabel(s: string, maxLen: number): string {
   if (!s) return '';
   return s.length <= maxLen ? s : `${s.slice(0, Math.max(1, maxLen - 1))}…`;
+}
+
+/** API の spend が文字列・カンマ区切りでも数値化 */
+function parseReportSpend(v: unknown): number {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number(String(v).replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 interface ReportingData {
@@ -70,6 +82,8 @@ const Reporting: React.FC = () => {
   const [dailyTotal, setDailyTotal] = useState(0);
   const [dailyCollapseActiveKeys, setDailyCollapseActiveKeys] = useState<string[]>([]);
   const [reportingCollapseActiveKeys, setReportingCollapseActiveKeys] = useState<string[]>([]);
+  /** 消化金額が0円のキャンペーンを一覧・グラフ・サマリーから除外 */
+  const [hideZeroSpend, setHideZeroSpend] = useState(true);
 
   // 画面サイズの検出
   useEffect(() => {
@@ -204,14 +218,33 @@ const Reporting: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dateRange / ページと同期
   }, [dateRange, dailyPage, dailyPageSize]);
 
+  /** 間引き後のキャンペーン（グラフ・一覧・サマリー共通） */
+  const campaignsForDisplay = useMemo(() => {
+    const camps = reportingData?.campaigns || [];
+    if (!hideZeroSpend) return camps;
+    return camps.filter((c) => parseReportSpend(c.spend) !== 0);
+  }, [reportingData?.campaigns, hideZeroSpend]);
+
+  const reportingSummaryDisplay = useMemo(() => {
+    if (!reportingData?.summary) return null;
+    if (!hideZeroSpend) return reportingData.summary;
+    const camps = campaignsForDisplay;
+    return {
+      total_campaigns: camps.length,
+      total_spend: camps.reduce((sum, c) => sum + parseReportSpend(c.spend), 0),
+      total_impressions: camps.reduce((sum, c) => sum + (Number(c.impressions) || 0), 0),
+      total_clicks: camps.reduce((sum, c) => sum + (Number(c.clicks) || 0), 0),
+    };
+  }, [reportingData?.summary, hideZeroSpend, campaignsForDisplay]);
+
   /** グラフ用：支出上位のみ・ラベル短縮（件数多いと軸が破綻するため） */
   const comparisonChart = useMemo(() => {
     const limit = isMobile ? 8 : 14;
-    const camps = reportingData?.campaigns;
+    const camps = campaignsForDisplay;
     if (!camps?.length) {
       return { rows: [] as Array<Record<string, string | number>>, total: 0, truncated: false };
     }
-    const sorted = [...camps].sort((a, b) => Number(b.spend) - Number(a.spend));
+    const sorted = [...camps].sort((a, b) => parseReportSpend(b.spend) - parseReportSpend(a.spend));
     const truncated = sorted.length > limit;
     const labelMax = isMobile ? 8 : 12;
     const rows = sorted.slice(0, limit).map((c) => ({
@@ -220,10 +253,10 @@ const Reporting: React.FC = () => {
       impressions: Number(c.impressions) || 0,
       clicks: Number(c.clicks) || 0,
       conversions: Number(c.conversions) || 0,
-      spend: Number(c.spend) || 0,
+      spend: parseReportSpend(c.spend),
     }));
     return { rows, total: sorted.length, truncated };
-  }, [reportingData, isMobile]);
+  }, [campaignsForDisplay, isMobile]);
 
   const campaignSelectOptionGroups = useMemo(() => {
     const groups = groupByLinkedMetaAdAccount(campaignCatalog, t('metaAdAccountGroupUngrouped'));
@@ -253,10 +286,15 @@ const Reporting: React.FC = () => {
   const reportingCampaignGroups = useMemo(
     () =>
       groupByLinkedMetaAdAccount(
-        (reportingData?.campaigns || []) as MetaAdAccountRow[],
+        (campaignsForDisplay || []) as MetaAdAccountRow[],
         t('metaAdAccountGroupUngrouped'),
       ),
-    [reportingData?.campaigns, t],
+    [campaignsForDisplay, t],
+  );
+
+  const totalConversionsDisplay = useMemo(
+    () => campaignsForDisplay.reduce((sum, c) => sum + (Number(c.conversions) || 0), 0),
+    [campaignsForDisplay],
   );
 
   useEffect(() => {
@@ -265,14 +303,9 @@ const Reporting: React.FC = () => {
 
   useEffect(() => {
     setReportingCollapseActiveKeys([]);
-  }, [reportingData?.campaigns]);
+  }, [campaignsForDisplay]);
 
   const chartBarWidth = Math.max(480, comparisonChart.rows.length * 52);
-
-  const totalConversionsFromCampaigns = () => {
-    if (!reportingData?.campaigns.length) return 0;
-    return reportingData.campaigns.reduce((sum, c) => sum + (Number(c.conversions) || 0), 0);
-  };
 
   // テーブルカラム定義
   const columns = [
@@ -428,6 +461,21 @@ const Reporting: React.FC = () => {
                 {t('reportingCampaignFilterReset')}
               </Button>
             </Space>
+            <div style={{ marginTop: 10 }}>
+              <Switch
+                checked={hideZeroSpend}
+                onChange={setHideZeroSpend}
+                size={isMobile ? 'small' : 'default'}
+              />
+              <Text type="secondary" style={{ marginLeft: 8, fontSize: 13 }}>
+                {t('reportingHideZeroSpend')}
+              </Text>
+              <div style={{ marginTop: 6, paddingLeft: isMobile ? 0 : 48 }}>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', lineHeight: 1.45 }}>
+                  {t('reportingHideZeroSpendHint')}
+                </Text>
+              </div>
+            </div>
           </Col>
           <Col xs={24} sm={12} md={8}>
             <RangePicker
@@ -463,13 +511,13 @@ const Reporting: React.FC = () => {
       </Card>
 
       {/* サマリー統計 */}
-      {reportingData && (
+      {reportingData && reportingSummaryDisplay && (
         <Row gutter={isMobile ? 8 : 16} style={{ marginBottom: 24 }}>
           <Col xs={12} sm={12} md={4}>
             <Card>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                  {reportingData.summary.total_campaigns}
+                  {reportingSummaryDisplay.total_campaigns}
                 </div>
                 <div style={{ color: '#666' }}>{t('totalCampaigns')}</div>
               </div>
@@ -479,7 +527,7 @@ const Reporting: React.FC = () => {
             <Card>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
-                  ¥{reportingData.summary.total_spend.toLocaleString()}
+                  ¥{reportingSummaryDisplay.total_spend.toLocaleString()}
                 </div>
                 <div style={{ color: '#666' }}>{t('totalSpend')}</div>
               </div>
@@ -489,7 +537,7 @@ const Reporting: React.FC = () => {
             <Card>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#faad14' }}>
-                  {reportingData.summary.total_impressions.toLocaleString()}
+                  {reportingSummaryDisplay.total_impressions.toLocaleString()}
                 </div>
                 <div style={{ color: '#666' }}>{t('totalImpressions')}</div>
               </div>
@@ -499,7 +547,7 @@ const Reporting: React.FC = () => {
             <Card>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f5222d' }}>
-                  {reportingData.summary.total_clicks.toLocaleString()}
+                  {reportingSummaryDisplay.total_clicks.toLocaleString()}
                 </div>
                 <div style={{ color: '#666' }}>{t('totalClicks')}</div>
               </div>
@@ -509,7 +557,7 @@ const Reporting: React.FC = () => {
             <Card>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#722ed1' }}>
-                  {totalConversionsFromCampaigns().toLocaleString()}
+                  {totalConversionsDisplay.toLocaleString()}
                 </div>
                 <div style={{ color: '#666' }}>{t('reportingTotalConversions')}</div>
               </div>
@@ -521,7 +569,7 @@ const Reporting: React.FC = () => {
       <Row gutter={isMobile ? 8 : 16}>
         <Col xs={24} lg={12}>
           <Card title={t('campaignList')}>
-            {!reportingData?.campaigns?.length ? (
+            {!campaignsForDisplay?.length ? (
               <Table
                 dataSource={[]}
                 columns={columns}

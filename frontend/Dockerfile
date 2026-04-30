@@ -11,8 +11,8 @@ RUN npm install
 # アプリケーションコードをコピー
 COPY . .
 
-# ポート3000を公開
-EXPOSE 3000
+# 開発サーバー用ポート（package.json の PORT と一致）
+EXPOSE 3002
 
 # 開発サーバーを起動
 CMD ["npm", "start"]

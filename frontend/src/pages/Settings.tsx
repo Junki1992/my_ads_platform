@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Modal, Alert, Tabs, Badge, message, Typography, Collapse } from 'antd';
+import { Card, Form, Input, Select, Button, Switch, Divider, Table, Space, Modal, Alert, Tabs, Badge, message, notification, Typography, Collapse } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import metaAccountService, { MetaAccount, MetaAccountCreate, MetaAdAccount } from '../services/metaAccountService';
@@ -440,21 +440,54 @@ const Settings: React.FC = () => {
     try {
       const response = await metaAccountService.fetchAccounts(accessToken);
       setFetchedAccounts(response.accounts);
-      setTokenInfo(response.token_info);
+      setTokenInfo(response.token_info ?? null);
       metaAccountForm.setFieldsValue({
         selected_account: editingAccount ? undefined : [],
       });
       if (response.accounts?.length) {
         message.success(t('fetchAccountsSuccess', { count: response.accounts.length }));
       } else {
-        message.info(t('fetchAccountsEmpty'));
+        const ti = response.token_info;
+        if (ti?.debug_error) {
+          message.error(t('debugTokenError', { message: String(ti.debug_error) }));
+        } else {
+          const lines: string[] = [t('fetchAccountsEmpty')];
+          if (ti?.app_id_mismatch) lines.push(t('tokenAppIdMismatch'));
+          if (ti?.missing_ads_scopes?.length) {
+            lines.push(
+              t('tokenMissingAdsScopes', { scopes: (ti.missing_ads_scopes as string[]).join(', ') }),
+            );
+          }
+          if (String(ti?.type || '').toUpperCase().includes('SYSTEM')) {
+            lines.push(t('fetchAccountsEmptySystemUser'));
+          }
+          notification.open({
+            type: 'info',
+            message: t('fetchAccountsEmptyTitle'),
+            description: (
+              <div style={{ whiteSpace: 'pre-wrap' }}>
+                {lines.map((line, idx) => (
+                  <p key={idx} style={{ margin: '0 0 6px' }}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ),
+            duration: 12,
+          });
+        }
       }
     } catch (error: any) {
       console.error('Failed to fetch accounts:', error);
       setFetchedAccounts([]);
-      setTokenInfo(null);
+      const d = error?.response?.data;
+      if (d?.token_info) {
+        setTokenInfo(d.token_info);
+      } else {
+        setTokenInfo(null);
+      }
       const errMsg =
-        error?.response?.data?.error ||
+        d?.error ||
         error?.response?.data?.detail ||
         error?.message;
       message.error(errMsg || t('fetchAccountsError'));
@@ -1020,6 +1053,23 @@ const Settings: React.FC = () => {
                       {getExpiryStatus(tokenInfo.expires_at).text}
                     </span>
                   </div>
+                  {tokenInfo.type && (
+                    <div>
+                      {t('tokenType')}: {String(tokenInfo.type)}
+                    </div>
+                  )}
+                  {Array.isArray(tokenInfo.scopes) && tokenInfo.scopes.length > 0 && (
+                    <div>
+                      {t('tokenScopes')}: {tokenInfo.scopes.join(', ')}
+                    </div>
+                  )}
+                  {Array.isArray(tokenInfo.missing_ads_scopes) && tokenInfo.missing_ads_scopes.length > 0 && (
+                    <div>
+                      {t('tokenMissingAdsScopes', { scopes: tokenInfo.missing_ads_scopes.join(', ') })}
+                    </div>
+                  )}
+                  {tokenInfo.app_id_mismatch && <div style={{ marginTop: 6 }}>{t('tokenAppIdMismatch')}</div>}
+                  {tokenInfo.debug_error && <div style={{ color: 'crimson' }}>{String(tokenInfo.debug_error)}</div>}
                 </div>
               }
               type={tokenInfo.is_valid ? 'success' : 'error'}

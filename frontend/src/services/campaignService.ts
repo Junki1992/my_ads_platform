@@ -217,6 +217,7 @@ class CampaignService {
     status: string;
     task_id?: string;
     message: string;
+    insights_tasks_queued_estimate?: number;
   }> {
     const response = await api.post('/campaigns/campaigns/sync_all_from_meta/');
     return response.data;

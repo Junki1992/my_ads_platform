@@ -1,5 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, DatePicker, InputNumber, message, Alert, Checkbox, Spin, Empty, Collapse, Pagination } from 'antd';
+import {
+  Card,
+  Table,
+  Button,
+  Tag,
+  Space,
+  Modal,
+  Form,
+  Input,
+  Select,
+  DatePicker,
+  InputNumber,
+  message,
+  Alert,
+  Checkbox,
+  Spin,
+  Empty,
+  Collapse,
+  Pagination,
+  Switch,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PlusOutlined, EditOutlined, PauseOutlined, PlayCircleOutlined, DeleteOutlined, SyncOutlined, DownloadOutlined } from '@ant-design/icons';
 import campaignService, { Campaign, CampaignCreate } from '../services/campaignService';
@@ -11,6 +32,24 @@ import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
+const { Text } = Typography;
+
+/** 一覧の消化（API の spend / 文字列・カンマ対応） */
+function parseCampaignSpend(v: unknown): number {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number(String(v).replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** キャッシュ済みで消化が 1 円以上あるか（null・— は「なし」扱い） */
+function campaignHasSpendAmount(c: Campaign): boolean {
+  if (c.spend == null) return false;
+  return parseCampaignSpend(c.spend) !== 0;
+}
 
 /** 一覧は広告アカウント単位でまとめるため全件取得（API は 100 件/ページ上限） */
 const CAMPAIGN_LIST_FETCH_PAGE_SIZE = 100;
@@ -31,17 +70,25 @@ const Campaigns: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [selectedMetaAccountIds, setSelectedMetaAccountIds] = useState<number[]>([]);
+  const [syncAllLoading, setSyncAllLoading] = useState(false);
+  /** 消化が未計測（—）または 0 円の行を一覧から除外 */
+  const [hideCampaignsWithoutSpend, setHideCampaignsWithoutSpend] = useState(true);
+
+  const campaignsVisibleInList = useMemo(() => {
+    if (!hideCampaignsWithoutSpend) return campaigns;
+    return campaigns.filter(campaignHasSpendAmount);
+  }, [campaigns, hideCampaignsWithoutSpend]);
 
   const campaignListGroups = useMemo(
-    () => groupByLinkedMetaAdAccount(campaigns, t('metaAdAccountGroupUngrouped')),
-    [campaigns, t],
+    () => groupByLinkedMetaAdAccount(campaignsVisibleInList, t('metaAdAccountGroupUngrouped')),
+    [campaignsVisibleInList, t],
   );
 
   const [campaignListCollapseActiveKeys, setCampaignListCollapseActiveKeys] = useState<string[]>([]);
 
   useEffect(() => {
     setCampaignListCollapseActiveKeys([]);
-  }, [campaigns]);
+  }, [campaignsVisibleInList]);
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -750,27 +797,29 @@ const Campaigns: React.FC = () => {
     }
   };
 
-  // すべてのキャンペーンのMeta API同期
+  // すべてのキャンペーンのMeta API同期（バックエンド: ステータス一括 + インサイト取得タスクをキュー）
   const handleSyncAllCampaigns = async () => {
+    setSyncAllLoading(true);
     try {
       const result = await campaignService.syncAllCampaignsFromMeta();
-      
+      const est = result.insights_tasks_queued_estimate;
       if (result.task_id) {
-        message.loading('すべてのキャンペーンを同期中...', 0);
-        
-        // 簡易的な完了待機
-        setTimeout(() => {
-          message.destroy();
-          message.success('すべてのキャンペーンの同期が完了しました');
-          fetchCampaigns();
-        }, 5000);
+        message.success(
+          est != null
+            ? t('campaignsSyncAllQueuedWithInsights', { count: est })
+            : t('campaignsSyncAllQueued'),
+        );
+        fetchCampaigns();
+        window.setTimeout(() => void fetchCampaigns(), 10000);
       } else {
-        message.success(result.message);
+        message.success(result.message || t('campaignsSyncAllDone'));
         fetchCampaigns();
       }
     } catch (error) {
-      message.error('同期に失敗しました');
+      message.error(t('campaignsSyncAllFailed'));
       console.error('Failed to sync all campaigns:', error);
+    } finally {
+      setSyncAllLoading(false);
     }
   };
 
@@ -1074,10 +1123,12 @@ const Campaigns: React.FC = () => {
             </Button>
             <Button 
               icon={<SyncOutlined />} 
-              onClick={handleSyncAllCampaigns}
-              title="すべてのキャンペーンをMeta APIと同期"
+              onClick={() => void handleSyncAllCampaigns()}
+              loading={syncAllLoading}
+              disabled={syncAllLoading}
+              title={t('campaignsSyncAllTooltip')}
             >
-              すべて同期
+              {t('campaignsSyncAll')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
               <span className="button-text">{t('newCampaign')}</span>
@@ -1133,6 +1184,17 @@ const Campaigns: React.FC = () => {
         <div style={{ marginBottom: 16, color: '#666', fontSize: '14px' }}>
           💡 {t('tapToViewDetails')}
         </div>
+        <div style={{ marginBottom: 12 }}>
+          <Switch checked={hideCampaignsWithoutSpend} onChange={setHideCampaignsWithoutSpend} />
+          <Text type="secondary" style={{ marginLeft: 8, fontSize: 13 }}>
+            {t('campaignsHideNoSpend')}
+          </Text>
+          <div style={{ marginTop: 6 }}>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', lineHeight: 1.45 }}>
+              {t('campaignsHideNoSpendHint')}
+            </Text>
+          </div>
+        </div>
         {!loading && campaigns.length === 0 ? (
           <Table
             columns={columns}
@@ -1143,6 +1205,8 @@ const Campaigns: React.FC = () => {
             size="small"
             locale={{ emptyText: <Empty description={t('noData')} /> }}
           />
+        ) : !loading && campaigns.length > 0 && campaignsVisibleInList.length === 0 ? (
+          <Empty description={t('campaignsAllFilteredBySpend')} />
         ) : (
           <>
             <Spin spinning={loading}>

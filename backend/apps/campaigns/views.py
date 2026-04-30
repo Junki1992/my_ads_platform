@@ -547,14 +547,29 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """すべてのキャンペーンのステータスをMeta APIから同期"""
         try:
             from .tasks import sync_all_campaigns_status_from_meta
-            result = sync_all_campaigns_status_from_meta.delay()
+            from .models import Campaign as CampaignModel
+
+            user_qs = CampaignModel.objects.filter(user=request.user).exclude(
+                status__in=['DELETED', 'ARCHIVED']
+            ).only('campaign_id')
+            insights_tasks_queued_estimate = sum(
+                1
+                for c in user_qs
+                if c.campaign_id and not str(c.campaign_id).startswith('camp_')
+            )
+
+            result = sync_all_campaigns_status_from_meta.delay(request.user.id)
             
             logger.info(f"All campaigns sync task started: {result.id}")
             
             return Response({
                 'status': 'started',
                 'task_id': result.id,
-                'message': 'すべてのキャンペーンの同期を開始しました'
+                'insights_tasks_queued_estimate': insights_tasks_queued_estimate,
+                'message': (
+                    f'同期を開始しました（ステータス一括＋消化などのインサイト取得を '
+                    f'{insights_tasks_queued_estimate} 件キュー）'
+                ),
             }, status=status.HTTP_202_ACCEPTED)
                 
         except Exception as e:
@@ -1229,6 +1244,19 @@ class CampaignViewSet(viewsets.ModelViewSet):
                             'frequency': float(insight.get('frequency', 0)),
                             'conversions': conversions,
                         }
+                    # HTTP 200 だが data が空 = 期間内にインサイト行がない（実質すべて0）。
+                    # None を返さないことで「未取得」と混ぜない。
+                    return {
+                        'spend': 0.0,
+                        'impressions': 0,
+                        'clicks': 0,
+                        'ctr': 0.0,
+                        'cpc': 0.0,
+                        'cpm': 0.0,
+                        'reach': 0,
+                        'frequency': 0.0,
+                        'conversions': 0,
+                    }
             except Exception as e:
                 logger.debug(f"Meta API fetch failed for campaign {campaign.id}: {str(e)}")
             return None
@@ -1257,14 +1285,21 @@ class CampaignViewSet(viewsets.ModelViewSet):
             try:
                 insights = None
                 
-                # 日付範囲が指定されている場合は、Meta APIから取得したデータのみを使用（キャッシュは使わない）
+                # 日付範囲指定時は Meta の期間集計を優先。取得失敗時のみキャッシュで補完（トークン切れ・タイムアウト等で
+                # spend がすべて 0 に見え、フロントの「消化0を非表示」で他アカウントが消える問題を防ぐ）
                 if start_date_str and end_date_str:
                     if campaign.id in insights_dict:
                         insights = insights_dict[campaign.id]
                         logger.info(f"Campaign {campaign.id} ({campaign.name}): Using Meta API data (date range: {start_date_str} to {end_date_str}), conversions: {insights.get('conversions', 0)}")
+                    elif campaign.cached_insights:
+                        insights = campaign.cached_insights
+                        logger.info(
+                            f"Campaign {campaign.id} ({campaign.name}): "
+                            "Meta range API returned no row for this campaign; "
+                            "using cached_insights fallback (snapshot may not match selected dates)"
+                        )
                     else:
-                        # 日付範囲が指定されているが、Meta APIから取得できない場合は0を返す
-                        logger.info(f"Campaign {campaign.id} ({campaign.name}): Date range specified but no Meta API data available, using 0")
+                        logger.info(f"Campaign {campaign.id} ({campaign.name}): Date range specified but no Meta API data and no cache, using 0")
                 else:
                     # 日付範囲が指定されていない場合は、Meta APIから取得したデータを優先、なければキャッシュを使用
                     if campaign.id in insights_dict:

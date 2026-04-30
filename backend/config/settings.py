@@ -151,7 +151,7 @@ REST_FRAMEWORK = {
 # CORS設定
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:3002,http://127.0.0.1:3002'
+    default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
@@ -197,15 +197,12 @@ BOX_CLIENT_SECRET = config('BOX_CLIENT_SECRET', default='')
 BOX_REDIRECT_URI = config('BOX_REDIRECT_URI', default=None)
 
 # フロントエンドURL
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3002')
 
 # Stripe設定
 STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
-
-# Frontend URL
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
 # Slack設定
 SLACK_BOT_TOKEN = config('SLACK_BOT_TOKEN', default='')
