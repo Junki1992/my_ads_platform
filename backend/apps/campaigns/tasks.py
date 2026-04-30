@@ -1125,21 +1125,27 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         }
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
+                        # data=[] でも「取得試行済み」として時刻を更新し、UI進捗に反映させる
+                        from django.utils import timezone
+                        zero_insights = {
+                            'spend': 0,
+                            'impressions': 0,
+                            'clicks': 0,
+                            'ctr': 0,
+                            'cpc': 0,
+                            'cpm': 0,
+                            'reach': 0,
+                            'frequency': 0,
+                            'conversions': 0,
+                        }
+                        campaign.cached_insights = zero_insights
+                        campaign.insights_updated_at = timezone.now()
+                        campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
                         return {
                             'status': 'warning',
                             'campaign_id': campaign.campaign_id,
                             'message': 'No insights data available',
-                            'insights': {
-                                'spend': 0,
-                                'impressions': 0,
-                                'clicks': 0,
-                                'ctr': 0,
-                                'cpc': 0,
-                                'cpm': 0,
-                                'reach': 0,
-                                'frequency': 0,
-                                'conversions': 0,
-                            }
+                            'insights': zero_insights
                         }
                 else:
                     logger.error(f"Meta API insights failed with status {response.status_code}: {response.text}")
@@ -1386,6 +1392,9 @@ def sync_campaign_status_from_meta(self, campaign_id):
 def sync_all_campaigns_status_from_meta(self, user_id: int):
     """ログインユーザーのキャンペーンのステータスを Meta と同期し、インサイト取得タスクをキューする"""
     from .models import Campaign
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from django.utils import timezone
+    from datetime import timedelta
     
     try:
         logger.info(f"=== SYNC ALL CAMPAIGNS STATUS TASK STARTED (user_id={user_id}) ===")
@@ -1395,39 +1404,68 @@ def sync_all_campaigns_status_from_meta(self, user_id: int):
         )
         logger.info(f"Found {campaigns.count()} campaigns to sync for user {user_id}")
         
+        campaigns_list = list(campaigns.only('id', 'name', 'status', 'campaign_id', 'insights_updated_at'))
+
+        # ステータス同期は I/O 待ち中心なので並列化して待ち時間を短縮
         results = []
-        for campaign in campaigns:
-            try:
-                result = sync_campaign_status_from_meta(campaign.id)
-                results.append({
-                    'campaign_id': campaign.id,
-                    'campaign_name': campaign.name,
-                    'result': result
-                })
-            except Exception as e:
-                logger.error(f"Failed to sync campaign {campaign.id}: {str(e)}")
-                results.append({
-                    'campaign_id': campaign.id,
-                    'campaign_name': campaign.name,
-                    'result': {
-                        'status': 'error',
-                        'message': f'Sync failed: {str(e)}'
-                    }
-                })
+        max_workers = min(8, max(1, len(campaigns_list)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_campaign = {
+                executor.submit(sync_campaign_status_from_meta, campaign.id): campaign
+                for campaign in campaigns_list
+            }
+            for future in as_completed(future_to_campaign):
+                campaign = future_to_campaign[future]
+                try:
+                    result = future.result()
+                    results.append({
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'result': result
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to sync campaign {campaign.id}: {str(e)}")
+                    results.append({
+                        'campaign_id': campaign.id,
+                        'campaign_name': campaign.name,
+                        'result': {
+                            'status': 'error',
+                            'message': f'Sync failed: {str(e)}'
+                        }
+                    })
         
         successful_syncs = len([r for r in results if r['result'].get('status') == 'success'])
         total_syncs = len(results)
 
+        # 「すべて同期」は体感速度を優先し、重いインサイト更新は対象を絞ってキューする
+        MAX_INSIGHTS_QUEUE_PER_RUN = 8
         insights_queued = 0
-        for campaign in campaigns:
+        insights_skipped_recent = 0
+        insights_skipped_inactive = 0
+        insights_skipped_limit = 0
+        recent_cutoff = timezone.now() - timedelta(minutes=30)
+        for campaign in campaigns_list:
             cid = getattr(campaign, 'campaign_id', None) or ''
             if cid and not str(cid).startswith('camp_'):
+                if getattr(campaign, 'status', None) != 'ACTIVE':
+                    insights_skipped_inactive += 1
+                    continue
+                updated_at = getattr(campaign, 'insights_updated_at', None)
+                if updated_at and updated_at >= recent_cutoff:
+                    insights_skipped_recent += 1
+                    continue
+                if insights_queued >= MAX_INSIGHTS_QUEUE_PER_RUN:
+                    insights_skipped_limit += 1
+                    continue
                 fetch_campaign_insights_from_meta.delay(campaign.id)
                 insights_queued += 1
         
         logger.info(
             f"Sync completed: {successful_syncs}/{total_syncs} campaigns status OK; "
-            f"insights tasks queued: {insights_queued}"
+            f"insights tasks queued: {insights_queued}, "
+            f"skipped_recent: {insights_skipped_recent}, "
+            f"skipped_inactive: {insights_skipped_inactive}, "
+            f"skipped_limit: {insights_skipped_limit}"
         )
         
         return {
@@ -1435,10 +1473,15 @@ def sync_all_campaigns_status_from_meta(self, user_id: int):
             'total_campaigns': total_syncs,
             'successful_syncs': successful_syncs,
             'insights_tasks_queued': insights_queued,
+            'insights_tasks_skipped_recent': insights_skipped_recent,
+            'insights_tasks_skipped_inactive': insights_skipped_inactive,
+            'insights_tasks_skipped_limit': insights_skipped_limit,
             'results': results,
             'message': (
                 f'Status sync {successful_syncs}/{total_syncs}; '
-                f'queued {insights_queued} insight fetch(es) for spend/impressions'
+                f'queued {insights_queued} insight fetch(es) for spend/impressions '
+                f'(skipped recent: {insights_skipped_recent}, '
+                f'inactive: {insights_skipped_inactive}, limit: {insights_skipped_limit})'
             ),
         }
         
@@ -2276,21 +2319,27 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         }
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
+                        # data=[] でも「取得試行済み」として時刻を更新し、UI進捗に反映させる
+                        from django.utils import timezone
+                        zero_insights = {
+                            'spend': 0,
+                            'impressions': 0,
+                            'clicks': 0,
+                            'ctr': 0,
+                            'cpc': 0,
+                            'cpm': 0,
+                            'reach': 0,
+                            'frequency': 0,
+                            'conversions': 0,
+                        }
+                        campaign.cached_insights = zero_insights
+                        campaign.insights_updated_at = timezone.now()
+                        campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
                         return {
                             'status': 'warning',
                             'campaign_id': campaign.campaign_id,
                             'message': 'No insights data available',
-                            'insights': {
-                                'spend': 0,
-                                'impressions': 0,
-                                'clicks': 0,
-                                'ctr': 0,
-                                'cpc': 0,
-                                'cpm': 0,
-                                'reach': 0,
-                                'frequency': 0,
-                                'conversions': 0,
-                            }
+                            'insights': zero_insights
                         }
                 else:
                     logger.error(f"Meta API insights failed with status {response.status_code}: {response.text}")
@@ -2773,21 +2822,27 @@ def fetch_campaign_insights_from_meta(self, campaign_id):
                         }
                     else:
                         logger.warning(f"No insights data found for campaign {campaign.campaign_id}")
+                        # data=[] でも「取得試行済み」として時刻を更新し、UI進捗に反映させる
+                        from django.utils import timezone
+                        zero_insights = {
+                            'spend': 0,
+                            'impressions': 0,
+                            'clicks': 0,
+                            'ctr': 0,
+                            'cpc': 0,
+                            'cpm': 0,
+                            'reach': 0,
+                            'frequency': 0,
+                            'conversions': 0,
+                        }
+                        campaign.cached_insights = zero_insights
+                        campaign.insights_updated_at = timezone.now()
+                        campaign.save(update_fields=['cached_insights', 'insights_updated_at'])
                         return {
                             'status': 'warning',
                             'campaign_id': campaign.campaign_id,
                             'message': 'No insights data available',
-                            'insights': {
-                                'spend': 0,
-                                'impressions': 0,
-                                'clicks': 0,
-                                'ctr': 0,
-                                'cpc': 0,
-                                'cpm': 0,
-                                'reach': 0,
-                                'frequency': 0,
-                                'conversions': 0,
-                            }
+                            'insights': zero_insights
                         }
                 else:
                     logger.error(f"Meta API insights failed with status {response.status_code}: {response.text}")

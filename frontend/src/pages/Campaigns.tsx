@@ -905,13 +905,15 @@ const Campaigns: React.FC = () => {
 
   // すべてのキャンペーンのMeta API同期（バックエンド: ステータス一括 + インサイト取得タスクをキュー）
   const handleSyncAllCampaigns = async () => {
+    const syncStartedAtIso = new Date().toISOString();
     setSyncAllLoading(true);
     // 押下直後に「同期中」を必ず可視化（API応答待ち中でも表示）
     setSyncProgressVisible(true);
     setSyncProgressUnknownTotal(true);
     setSyncProgressTotal(0);
     setSyncProgressDone(0);
-    setSyncProgressStartedAt(null);
+    // API応答前に子タスクが完了するケースがあるため、押下時刻を開始基準にする
+    setSyncProgressStartedAt(syncStartedAtIso);
     setSyncProgressLastUpdatedAt(Date.now());
     setSyncProgressStuck(false);
     setSyncAllTaskId(null);
@@ -928,7 +930,7 @@ const Campaigns: React.FC = () => {
           setSyncProgressVisible(true);
           setSyncProgressTotal(est);
           setSyncProgressDone(0);
-          setSyncProgressStartedAt(new Date().toISOString());
+          setSyncProgressStartedAt(syncStartedAtIso);
           setSyncProgressLastUpdatedAt(Date.now());
           setSyncProgressUnknownTotal(false);
         } else {
@@ -936,7 +938,7 @@ const Campaigns: React.FC = () => {
           setSyncProgressVisible(true);
           setSyncProgressTotal(0);
           setSyncProgressDone(0);
-          setSyncProgressStartedAt(null);
+          setSyncProgressStartedAt(syncStartedAtIso);
           setSyncProgressLastUpdatedAt(Date.now());
           setSyncProgressUnknownTotal(true);
         }
@@ -950,10 +952,25 @@ const Campaigns: React.FC = () => {
         window.setTimeout(() => void fetchCampaigns(), 10000);
         window.setTimeout(() => void fetchCampaigns(), 15000);
       } else {
+        if (est != null && est > 0) {
+          setSyncProgressVisible(true);
+          setSyncProgressUnknownTotal(false);
+          setSyncProgressTotal(est);
+          setSyncProgressDone(0);
+          setSyncProgressStartedAt(syncStartedAtIso);
+          setSyncProgressLastUpdatedAt(Date.now());
+        } else {
+          setSyncProgressVisible(false);
+          setSyncProgressUnknownTotal(false);
+          setSyncProgressTotal(0);
+        }
         setSyncAllTaskState('success');
         setSyncAllTaskMessage(result.message || t('campaignsSyncAllDone'));
         message.success(result.message || t('campaignsSyncAllDone'));
         fetchCampaigns();
+        window.setTimeout(() => void fetchCampaigns(), 5000);
+        window.setTimeout(() => void fetchCampaigns(), 10000);
+        window.setTimeout(() => void fetchCampaigns(), 15000);
       }
     } catch (error) {
       setSyncProgressVisible(false);

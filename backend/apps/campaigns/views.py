@@ -547,29 +547,63 @@ class CampaignViewSet(viewsets.ModelViewSet):
     def sync_all_from_meta(self, request):
         """すべてのキャンペーンのステータスをMeta APIから同期"""
         try:
-            from .tasks import sync_all_campaigns_status_from_meta
+            from .tasks import sync_campaign_status_from_meta, fetch_campaign_insights_from_meta
             from .models import Campaign as CampaignModel
+            from django.utils import timezone
+            from datetime import timedelta
 
-            user_qs = CampaignModel.objects.filter(user=request.user).exclude(
+            max_insights_queue_per_run = 8
+            recent_cutoff = timezone.now() - timedelta(minutes=30)
+
+            user_qs = list(CampaignModel.objects.filter(user=request.user).exclude(
                 status__in=['DELETED', 'ARCHIVED']
-            ).only('campaign_id')
-            insights_tasks_queued_estimate = sum(
-                1
-                for c in user_qs
-                if c.campaign_id and not str(c.campaign_id).startswith('camp_')
-            )
+            ).only('id', 'campaign_id', 'status', 'insights_updated_at'))
 
-            result = sync_all_campaigns_status_from_meta.delay(request.user.id)
-            
-            logger.info(f"All campaigns sync task started: {result.id}")
+            # 親タスク1本を監視する方式だと PENDING 固着時に UX が破綻するため、
+            # ここで直接「子タスクのみ」をキュー投入して即返す。
+            status_tasks_queued = 0
+            for c in user_qs:
+                if c.campaign_id and not str(c.campaign_id).startswith('camp_'):
+                    sync_campaign_status_from_meta.delay(c.id)
+                    status_tasks_queued += 1
+
+            insights_tasks_queued_estimate = 0
+            for c in user_qs:
+                if not c.campaign_id or str(c.campaign_id).startswith('camp_'):
+                    continue
+                if c.status != 'ACTIVE':
+                    continue
+                if c.insights_updated_at and c.insights_updated_at >= recent_cutoff:
+                    continue
+                insights_tasks_queued_estimate += 1
+                if insights_tasks_queued_estimate >= max_insights_queue_per_run:
+                    break
+
+            insights_queued = 0
+            for c in user_qs:
+                if not c.campaign_id or str(c.campaign_id).startswith('camp_'):
+                    continue
+                if c.status != 'ACTIVE':
+                    continue
+                if c.insights_updated_at and c.insights_updated_at >= recent_cutoff:
+                    continue
+                if insights_queued >= max_insights_queue_per_run:
+                    break
+                fetch_campaign_insights_from_meta.delay(c.id)
+                insights_queued += 1
+
+            logger.info(
+                "All campaigns sync queued directly: "
+                f"status_tasks={status_tasks_queued}, insights_tasks={insights_queued}"
+            )
             
             return Response({
                 'status': 'started',
-                'task_id': result.id,
-                'insights_tasks_queued_estimate': insights_tasks_queued_estimate,
+                'insights_tasks_queued_estimate': insights_queued,
+                'status_tasks_queued': status_tasks_queued,
                 'message': (
-                    f'同期を開始しました（ステータス一括＋消化などのインサイト取得を '
-                    f'{insights_tasks_queued_estimate} 件キュー）'
+                    f'同期を開始しました（ステータス同期 {status_tasks_queued} 件、'
+                    f'インサイト取得 {insights_queued} 件をキュー）'
                 ),
             }, status=status.HTTP_202_ACCEPTED)
                 
